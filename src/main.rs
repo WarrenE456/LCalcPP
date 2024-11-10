@@ -1,5 +1,8 @@
 pub mod scanner;
 pub mod lcalc;
+pub mod parser;
+pub mod expr;
+pub mod runtime;
 
 use lcalc::Lcalc;
 
@@ -27,7 +30,12 @@ fn main() -> ExitCode {
 
         let lcalc = Lcalc::new();
 
-        return lcalc.run(program);
+        return ExitCode::from(lcalc.run_file(&program));
+    }
+    else if args.len() == 1 {
+        let lcalc = Lcalc::new();
+        lcalc.run_prompt();
+        return ExitCode::from(0);
     }
     else {
 

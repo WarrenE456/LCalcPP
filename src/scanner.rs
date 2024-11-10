@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
     // One character
     Plus,   Star,   Slash,  Dot,
@@ -25,12 +25,12 @@ pub struct ScannerError {
     pub msg: String
 }
 
-#[derive(Debug)]
-pub struct Token<'a> {
-    t: TokenType,
-    lexeme: &'a str,
-    line: usize,
-    col: usize,
+#[derive(Debug, Clone)]
+pub struct Token {
+    pub t: TokenType,
+    pub lexeme: String,
+    pub line: usize,
+    pub col: usize,
 } 
 
 pub struct Scanner<'a> {
@@ -87,7 +87,7 @@ impl<'a> Scanner<'a> {
         };
     }
     fn gen_token(&self, start: usize, t: TokenType) -> Token {
-        let lexeme = std::str::from_utf8(&self.program[start..self.cur.get()]).unwrap();
+        let lexeme = String::from_utf8(self.program[start..self.cur.get()].to_vec()).unwrap();
         Token { t, lexeme, col: self.col.get(), line: self.line.get() }
     }
     fn get_next_token(&self) -> Result<Token, ScannerError> {

@@ -1,6 +1,8 @@
 use crate::scanner::Scanner;
+use crate::parser::Parser;
+use crate::runtime::Interpreter;
 
-use std::process::ExitCode;
+use std::io::{stdin, stdout, Write};
 
 pub struct Lcalc {
 }
@@ -16,18 +18,40 @@ impl Lcalc {
         let err_msg = format!("Error:{}:{}: {}", line, col, msg);
         self.report_error(err_msg);
     }
-    pub fn run(&self, program: String) -> ExitCode {
+    pub fn run_file(&self, program: &str) -> u8 {
         let scanner = Scanner::new(&program);
         let tokens = match scanner.scan_tokens() {
             Ok(tokens) => tokens,
-            Err(error) => {
-                self.gen_error(error.line, error.col, error.msg);
-                return ExitCode::from(1);
+            Err(e) => {
+                self.gen_error(e.line, e.col, e.msg);
+                return 1;
             }
         };
 
-        println!("{:?}", tokens);
+        let parser = Parser::new(&tokens);
+        let expr = match parser.parse() {
+            Ok(expr) => expr,
+            Err(e) => {
+                self.gen_error(e.line, e.col, e.msg);
+                return 1;
+            }
+        };
 
-        return ExitCode::from(0)
+        let interpreter = Interpreter::new();
+        println!("\n{}", interpreter.interpret(&expr).unwrap().to_string());
+
+        return 0;
+    }
+    pub fn run_prompt(&self) {
+
+        let mut line = String::new();
+        loop {
+            print!(">  ");
+            let _ = stdout().flush();
+            stdin().read_line(&mut line).expect("Failed to read line.");
+            self.run_file(&line);
+            line.clear();
+        }
+
     }
 }
