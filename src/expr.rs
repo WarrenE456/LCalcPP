@@ -8,7 +8,16 @@ pub struct Binary {
 }
 
 #[derive(Debug)]
+pub struct Binding {
+    pub name: String,
+    pub typename: Option<Token>,
+    pub op: Token,
+    pub val: Expr,
+}
+
+#[derive(Debug)]
 pub enum Expr {
+    Primary(Token),
     Binary(Box<Binary>),
-    Primary(Token)
+    Binding(Box<Binding>),
 }

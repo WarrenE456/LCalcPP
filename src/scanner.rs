@@ -11,8 +11,8 @@ pub enum TokenType {
     Minus,  Arrow,
 
     // Variable characters or keyword
-    String, Number, In,
-    Lambda, Identifer,
+    String, Number, In, Let,
+    Type, Lambda, Identifer,
 
     // Misc.
     EOF
@@ -134,6 +134,8 @@ impl<'a> Scanner<'a> {
                     let keywords: HashMap<&str, TokenType> = HashMap::from([
                         ("in", TokenType::In),
                         ("L", TokenType::Lambda),
+                        ("let", TokenType::Let),
+                        ("type", TokenType::Type),
                     ]);
 
                     // String

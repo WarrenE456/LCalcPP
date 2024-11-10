@@ -1,9 +1,39 @@
+// TODO fix string operations
 use crate::expr::*;
 use crate::scanner::{Token, TokenType};
 
+use std::cell::RefCell;
+
+#[derive(Clone)]
 pub enum Val {
     Number(f64),
     String(String),
+    Unit,
+}
+
+#[derive(Eq, PartialEq)]
+enum Primative {
+    Number,
+    String,
+    Unit
+}
+
+impl Primative {
+    pub fn from_typename(typename: &str) -> Option<Self> {
+        match typename {
+            "Number" => Some(Primative::Number),
+            "String" => Some(Primative::String),
+            "Unit"   => Some(Primative::Unit),
+            _ => None,
+        }
+    }
+    pub fn to_str(&self) -> &str {
+        match self {
+            Primative::Number =>   "Number",
+            Primative::String =>   "String",
+            Primative::Unit   =>   "Unit",
+        }
+    }
 }
 
 impl Val {
@@ -11,15 +41,14 @@ impl Val {
         match self {
             Val::Number(n) => n.to_string(),
             Val::String(s) => s.clone(),
+            Val::Unit => "()".to_string(),
         }
     }
-}
-
-impl Val {
-    pub fn type_to_str(&self) -> &str {
+    pub fn to_primative(&self) -> Primative {
         match self {
-            Val::Number(_) => "Number",
-            Val::String(_) => "String",
+            Val::Number(_) => Primative::Number,
+            Val::String(_) => Primative::String,
+            Val::Unit => Primative::Unit,
         }
     }
 }
@@ -44,13 +73,13 @@ fn str_mul(s: &mut String, n: f64) -> Result<(), String> {
 }
 
 pub struct Interpreter {
-    // TODO: env
+    env: RefCell<Vec<(String, Val)>>,
 }
 
 // TODO: represent arithmatic with functions
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter {}
+        Interpreter { env: RefCell::new(vec![]) }
     }
     pub fn visit_binary(& self, binary: & Binary) -> Result<Val, RuntimeError> {
         let left = self.interpret(&binary.left)?;
@@ -78,7 +107,8 @@ impl Interpreter {
                     }
                     (a, b) => {
                         let token = binary.op.clone();
-                        let msg = format!("Attempt to use plus operator on {} and {}.", a.type_to_str(), b.type_to_str());
+                        let msg = format!("Attempt to use plus operator on {} and {}.",
+                            a.to_primative().to_str(), b.to_primative().to_str());
                         Err(RuntimeError { token, msg })
                     }
                 }
@@ -90,7 +120,8 @@ impl Interpreter {
                     }
                     (a, b) => {
                         let token = binary.op.clone();
-                        let msg = format!("Attempt to use minus operator on {} and {}.", a.type_to_str(), b.type_to_str());
+                        let msg = format!("Attempt to use minus operator on {} and {}.",
+                            a.to_primative().to_str(), b.to_primative().to_str());
                         Err(RuntimeError { token, msg })
                     }
                 }
@@ -120,7 +151,8 @@ impl Interpreter {
                     }
                     (a, b) => {
                         let token = binary.op.clone();
-                        let msg = format!("Attempt to multiplication operator on {} and {}.", a.type_to_str(), b.type_to_str());
+                        let msg = format!("Attempt to multiplication operator on {} and {}.",
+                            a.to_primative().to_str(), b.to_primative().to_str());
                         Err(RuntimeError { token, msg })
                     }
                 }
@@ -132,29 +164,68 @@ impl Interpreter {
                     }
                     (a, b) => {
                         let token = binary.op.clone();
-                        let msg = format!("Attempt to division operator on {} and {}.", a.type_to_str(), b.type_to_str());
+                        let msg = format!("Attempt to division operator on {} and {}.",
+                            a.to_primative().to_str(), b.to_primative().to_str());
                         Err(RuntimeError { token, msg })
                     }
                 }
             }
+            In => Ok(right),
             _ => panic!("INTERPRETER FAILED in visist_binary: Operator '{}' type did not match any.", binary.op.lexeme),
         }
     }
-    pub fn visit_primary(&self, tok: &Token) -> Val {
+    pub fn visit_binding(&self, binding: &Binding) -> Result<Val, RuntimeError> {
+        let val = self.interpret(&binding.val)?;
+
+        // Type checking
+        if let Some(typename) = &binding.typename {
+            let target_type = match Primative::from_typename(&typename.lexeme) {
+                Some(v) => Ok(v),
+                None => {
+                    let msg = format!("Reference to unbound type '{}'.", typename.lexeme);
+                    Err(RuntimeError { token: typename.clone(), msg })
+                }
+            }?;
+            
+            let val_type = val.to_primative();
+            if val_type != target_type {
+                let msg = format!("Cannot bind value of type {} to variable of type {}.",
+                    val_type.to_str(), target_type.to_str());
+                return Err(RuntimeError { token: typename.clone(), msg });
+            }
+        }
+
+        self.env.borrow_mut().push((binding.name.clone(), val));
+
+        Ok(Val::Unit)
+    }
+    pub fn visit_primary(&self, tok: &Token) -> Result<Val, RuntimeError> {
         match tok.t {
             TokenType::String => {
-                return Val::String(tok.lexeme[1..tok.lexeme.len() - 1].to_string())
+                Ok(Val::String(tok.lexeme[1..tok.lexeme.len() - 1].to_string()))
             }
             TokenType::Number => {
-                return Val::Number(tok.lexeme.parse().unwrap());
+                Ok(Val::Number(tok.lexeme.parse().unwrap()))
             }
-            _ => panic!("INTERPRETER FAILED in visit_primary: Found token not of type String or Number.")
+            TokenType::Identifer => {
+                // TODO: Stop granny shiftin', not double clutching like you should
+                for (name, val) in self.env.borrow().iter().rev() {
+                    if *name == tok.lexeme {
+                        return Ok(val.clone())
+                    }
+                }
+                let msg = format!("Reference to unbound variable {}.", tok.lexeme);
+                Err(RuntimeError{ token: tok.clone(), msg })
+
+            }
+            _ => panic!("INTERPRETER FAILED in visit_primary: Found token not of type String, Number, or Identifier.")
         }
     }
     pub fn interpret(&self, expr: &Expr) -> Result<Val, RuntimeError> {
         match expr {
-            Expr::Primary(tok) => Ok(self.visit_primary(tok)),
             Expr::Binary(binary) => Ok(self.visit_binary(&(*binary))?),
+            Expr::Binding(binding) => Ok(self.visit_binding(&(*binding))?),
+            Expr::Primary(tok) => Ok(self.visit_primary(tok)?),
         }
     }
 }

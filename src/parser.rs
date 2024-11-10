@@ -7,12 +7,15 @@ use std::cell::Cell;
 * Context-free Grammar
 *
 * program -> expr EOF ;
-* expr -> term ;
+* expr -> in ;
+* in -> binding ( "in" binding )* ;
+* binding -> "let" IDENTIFIER ( ":" type )? "=" binding | term;
 * term -> factor ( ("+" | "-") factor )* ;
 * factor -> group ( ("*" | "/") group )* ;
 * group -> "(" expr ")" | primary ;
 * primary -> STRING | NUMBER | IDENTIFIER ;
 *
+* type -> IDENTIFIER ;
 */
 
 pub struct ParserError {
@@ -43,9 +46,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&self, t: TokenType) {
+    fn expect(&self, t: TokenType) -> Result<Token, Token> {
         let token = self.advance();
-        assert_eq!(token.t, t);
+        if token.t == t {
+            Ok(token)
+        } else {
+            Err(token)
+        }
     }
 
     fn peek(&self) -> Token {
@@ -89,9 +96,9 @@ impl<'a> Parser<'a> {
     // group -> "(" expr ")" | primary ;
     fn group(&self) -> Result<Expr, ParserError> {
         if self.is_match(TokenType::LParen) {
-            self.consume(TokenType::LParen);
+            let _ = self.advance();
             let expr = self.expr()?;
-            self.consume(TokenType::RParen);
+            let _ = self.advance();
             Ok(expr)
         }
         else {
@@ -120,10 +127,63 @@ impl<'a> Parser<'a> {
         }
         Ok(expr)
     }
+    
+    // type -> IDENTIFIER ;
+    fn _type(&self) -> Result<Token, ParserError> {
 
-    // expr -> term ;
+        let typename =  self.expect(TokenType::Identifer).map_err(|e| {
+            let msg = format!("Expected a type, found '{}'.", e.lexeme);
+            ParserError { line: e.line, col: e.col, msg }
+        })?;
+
+        Ok(typename)
+    }
+
+    // binding -> "let" IDENTIFIER ( ":" type ) "=" term | term;
+    fn binding(&self) -> Result<Expr, ParserError> {
+        if self.is_match(TokenType::Let) {
+            let _ = self.advance(); 
+
+            let name =  self.expect(TokenType::Identifer).map_err(|e| {
+                let msg = format!("Expected a variable name, found '{}'.", e.lexeme);
+                ParserError { line: e.line, col: e.col, msg }
+            })?.lexeme;
+
+            let typename = if self.is_match(TokenType::Colon) {
+                let _ = self.advance();
+                Some(self._type())
+            } else {
+                None
+            }.transpose()?;
+
+            let op = self.expect(TokenType::Equal).map_err(|e| {
+                let msg = format!("Expected '=', found '{}'.", e.lexeme);
+                ParserError { line: e.line, col: e.col, msg }
+            })?;
+
+            let val = self.term()?;
+
+            Ok(Expr::Binding(Box::new(Binding { name, typename, op, val })))
+        }   
+        else {
+            self.term()
+        }
+    }
+
+    // in -> binding ( "in" binding )* ;
+    fn _in(&self) -> Result<Expr, ParserError> {
+        let mut expr = self.binding()?;
+        while self.is_match(TokenType::In) {
+            let op = self.advance();
+            let right = self.binding()?;
+            expr = Expr::Binary(Box::new(Binary { left: expr, op, right }));
+        }
+        Ok(expr)
+    }
+
+    // expr -> in ;
     fn expr(&self) -> Result<Expr, ParserError> {
-        self.term()
+        self._in()
     }
 
     // program -> expr EOF ;
