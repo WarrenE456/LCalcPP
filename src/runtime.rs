@@ -76,7 +76,6 @@ pub struct Interpreter {
     env: RefCell<Vec<(String, Val)>>,
 }
 
-// TODO: represent arithmatic with functions
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter { env: RefCell::new(vec![]) }
@@ -103,7 +102,7 @@ impl Interpreter {
                     }
                     (Val::String(mut b), Val::String(a)) => {
                         b.push_str(&a);
-                        Ok(Val::String(a))
+                        Ok(Val::String(b))
                     }
                     (a, b) => {
                         let token = binary.op.clone();

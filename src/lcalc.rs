@@ -38,7 +38,14 @@ impl Lcalc {
         };
 
         let interpreter = Interpreter::new();
-        println!("\n{}", interpreter.interpret(&expr).unwrap().to_string());
+        let val = match interpreter.interpret(&expr) {
+            Ok(val) => val,
+            Err(e) => {
+                self.gen_error(e.token.line, e.token.col, e.msg);
+                return 1;
+            }
+        };
+        println!("\n{}", val.to_string());
 
         return 0;
     }
