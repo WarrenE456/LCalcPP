@@ -9,9 +9,11 @@ use std::cell::Cell;
 * program -> expr EOF ;
 * expr -> in ;
 * in -> binding ( "in" binding )* ;
-* binding -> "let" IDENTIFIER ( ":" type )? "=" binding | term;
+* binding -> "let" IDENTIFIER ( ":" type )? "=" lambda | lambda;
+* lambda -> "L" IDENTIFIER ":" type "." expr | term ";"
 * term -> factor ( ("+" | "-") factor )* ;
 * factor -> group ( ("*" | "/") group )* ;
+* call -> IDENTIFIER group* | group
 * group -> "(" expr ")" | primary ;
 * primary -> STRING | NUMBER | IDENTIFIER ;
 *
@@ -106,6 +108,9 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // call -> IDENTIFIER group* | group
+    // TODO
+
     // factor -> group ( ("*" | "/") group )* ;
     fn factor(&self) -> Result<Expr, ParserError> {
         let mut expr = self.group()?;
@@ -128,18 +133,62 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
     
-    // type -> IDENTIFIER ;
-    fn _type(&self) -> Result<Token, ParserError> {
+    // type -> IDENTIFIER ( "->" IDENTIFIER );
+    fn _type(&self) -> Result<Vec<Token>, ParserError> {
+        let mut types = Vec::<Token>::new();
 
-        let typename =  self.expect(TokenType::Identifer).map_err(|e| {
-            let msg = format!("Expected a type, found '{}'.", e.lexeme);
-            ParserError { line: e.line, col: e.col, msg }
-        })?;
+        loop {
+            let typename =  self.expect(TokenType::Identifer).map_err(|e| {
+                let msg = format!("Expected a type, found '{}'.", e.lexeme);
+                ParserError { line: e.line, col: e.col, msg }
+            })?;
 
-        Ok(typename)
+            types.push(typename);
+
+            if self.is_match(TokenType::Arrow) {
+                let _ = self.advance();
+            } else {
+                break;
+            }
+        }
+
+        Ok(types)
     }
 
-    // binding -> "let" IDENTIFIER ( ":" type ) "=" term | term;
+    // Fix 'end of file' error message when attemping to use untyped lambda e.g. L x. x
+    // lambda -> "L" IDENTIFIER ":" type "." expr | term ";"
+    fn lambda(&self) -> Result<Expr, ParserError> {
+        if self.is_match(TokenType::Lambda) {
+            let _ = self.advance();
+
+            let arg = self.expect(TokenType::Identifer).map_err(|e| {
+                let msg = format!("Expected identifier an identifier after the lambda, found '{}'.", e.lexeme);
+                ParserError { line: e.line, col: e.col, msg }
+            })?.lexeme;
+
+            let _ = self.expect(TokenType::Colon).map_err(|e| {
+                let msg = format!("Expected a colon after the argument, found '{}'.", e.lexeme);
+                ParserError { line: e.line, col: e.col, msg }
+            })?;
+
+            let argtype = self._type()?;
+
+            let _ = self.expect(TokenType::Dot).map_err(|e| {
+                let msg = format!("Expected a dot after the argument type, found '{}'.", e.lexeme);
+                ParserError { line: e.line, col: e.col, msg }
+            })?;
+
+            let body = self.expr()?;
+
+            Ok(Expr::Abstraction(Box::new(AbstractionDef { arg, argtype, body })))
+        } 
+        else {
+            Ok(self.term()?)
+        }
+    }
+
+
+    // binding -> "let" IDENTIFIER ( ":" type ) "=" lambda | lambda;
     fn binding(&self) -> Result<Expr, ParserError> {
         if self.is_match(TokenType::Let) {
             let _ = self.advance(); 
@@ -161,12 +210,12 @@ impl<'a> Parser<'a> {
                 ParserError { line: e.line, col: e.col, msg }
             })?;
 
-            let val = self.term()?;
+            let val = self.lambda()?;
 
             Ok(Expr::Binding(Box::new(Binding { name, typename, op, val })))
         }   
         else {
-            self.term()
+            self.lambda()
         }
     }
 

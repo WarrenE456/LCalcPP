@@ -1,37 +1,95 @@
-// TODO fix string operations
 use crate::expr::*;
 use crate::scanner::{Token, TokenType};
 
 use std::cell::RefCell;
 
+#[derive(Debug, Clone)]
+pub struct Abstraction {
+    pub arg: String,
+    pub argtype: Type,
+    pub body: Expr,
+}
+
 #[derive(Clone)]
 pub enum Val {
     Number(f64),
     String(String),
+    Abstraction(Abstraction, Option<Box<Type>>), 
     Unit,
 }
 
-#[derive(Eq, PartialEq)]
-enum Primative {
-    Number,
-    String,
-    Unit
+impl Val {
+
 }
 
-impl Primative {
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Type {
+    Number,
+    String,
+    Abstraction(Box<Type>, Option<Box<Type>>),
+    Unit,
+}
+
+impl Type {
     pub fn from_typename(typename: &str) -> Option<Self> {
         match typename {
-            "Number" => Some(Primative::Number),
-            "String" => Some(Primative::String),
-            "Unit"   => Some(Primative::Unit),
+            "Number" => Some(Type::Number),
+            "String" => Some(Type::String),
+            "Unit"   => Some(Type::Unit),
             _ => None,
         }
     }
-    pub fn to_str(&self) -> &str {
+    pub fn from_slice(types: &[Type]) -> Type {
+        if types.len() == 0 {
+            Type::Unit
+        }
+        else if types.len() == 1 {
+            types[0].clone()
+        }
+        else {
+            Type::Abstraction(Box::new(types[0].clone()), Some(Box::new(Self::from_slice(&types[1..]))))
+        }
+
+    }
+    pub fn from_tokens(tokens: &Vec<Token>) -> Result<Type, RuntimeError> {
+        let mut types = Vec::<Type>::new();
+        for tok in tokens.iter() {
+            let new_argt = Type::from_typename(&tok.lexeme).ok_or_else(|| {
+                let msg = format!("Reference to unbound type '{}'.", tok.lexeme);
+                RuntimeError { token: tok.clone(), msg }
+            })?;
+            types.push(new_argt);
+        }
+        Ok(Type::from_slice(&types.as_slice()))
+    }
+    pub fn to_string(&self) -> String {
         match self {
-            Primative::Number =>   "Number",
-            Primative::String =>   "String",
-            Primative::Unit   =>   "Unit",
+            Type::Number =>   "Number".to_string(),
+            Type::String =>   "String".to_string(),
+            Type::Unit   =>   "Unit".to_string(),
+            Type::Abstraction(a, b) =>
+                format!("({} -> {})",
+                    (*a).to_string(),
+                    if let Some(b) = b { (*b).to_string() } else { "{unknown}".to_string() } ),
+        }
+    }
+    pub fn deep_equality(target: &Self, checked: &Self) -> bool {
+        match (target, checked) {
+            (Type::Abstraction(a, b),
+             Type::Abstraction(c, d)) => {
+                if *a != *c {
+                    false
+                }
+                else {
+                    if let (Some(b), Some(d)) = (b, d) {
+                        Self::deep_equality(b, d)
+                    }
+                    else {
+                        true
+                    }
+                }
+            }
+            (a, b) => a == b,
         }
     }
 }
@@ -42,13 +100,17 @@ impl Val {
             Val::Number(n) => n.to_string(),
             Val::String(s) => s.clone(),
             Val::Unit => "()".to_string(),
+            Val::Abstraction(_, _) => "<abstraction>".to_string(),
         }
     }
-    pub fn to_primative(&self) -> Primative {
+    pub fn to_type(&self) -> Type {
         match self {
-            Val::Number(_) => Primative::Number,
-            Val::String(_) => Primative::String,
-            Val::Unit => Primative::Unit,
+            Val::Number(_) => Type::Number,
+            Val::String(_) => Type::String,
+            Val::Unit => Type::Unit,
+            Val::Abstraction(abs, val) => {
+                Type::Abstraction(Box::new(abs.argtype.clone()), val.clone())
+            }
         }
     }
 }
@@ -107,7 +169,7 @@ impl Interpreter {
                     (a, b) => {
                         let token = binary.op.clone();
                         let msg = format!("Attempt to use plus operator on {} and {}.",
-                            a.to_primative().to_str(), b.to_primative().to_str());
+                            a.to_type().to_string(), b.to_type().to_string());
                         Err(RuntimeError { token, msg })
                     }
                 }
@@ -120,7 +182,7 @@ impl Interpreter {
                     (a, b) => {
                         let token = binary.op.clone();
                         let msg = format!("Attempt to use minus operator on {} and {}.",
-                            a.to_primative().to_str(), b.to_primative().to_str());
+                            a.to_type().to_string(), b.to_type().to_string());
                         Err(RuntimeError { token, msg })
                     }
                 }
@@ -151,7 +213,7 @@ impl Interpreter {
                     (a, b) => {
                         let token = binary.op.clone();
                         let msg = format!("Attempt to multiplication operator on {} and {}.",
-                            a.to_primative().to_str(), b.to_primative().to_str());
+                            a.to_type().to_string(), b.to_type().to_string());
                         Err(RuntimeError { token, msg })
                     }
                 }
@@ -164,7 +226,7 @@ impl Interpreter {
                     (a, b) => {
                         let token = binary.op.clone();
                         let msg = format!("Attempt to division operator on {} and {}.",
-                            a.to_primative().to_str(), b.to_primative().to_str());
+                            a.to_type().to_string(), b.to_type().to_string());
                         Err(RuntimeError { token, msg })
                     }
                 }
@@ -174,24 +236,31 @@ impl Interpreter {
         }
     }
     pub fn visit_binding(&self, binding: &Binding) -> Result<Val, RuntimeError> {
-        let val = self.interpret(&binding.val)?;
+        let mut val = self.interpret(&binding.val)?;
 
-        // Type checking
-        if let Some(typename) = &binding.typename {
-            let target_type = match Primative::from_typename(&typename.lexeme) {
-                Some(v) => Ok(v),
-                None => {
-                    let msg = format!("Reference to unbound type '{}'.", typename.lexeme);
-                    Err(RuntimeError { token: typename.clone(), msg })
-                }
-            }?;
-            
-            let val_type = val.to_primative();
-            if val_type != target_type {
+        let val_type = val.to_type();
+        let target_type =  if let Some(typename) = &binding.typename {
+            let target_type = Type::from_tokens(typename)?;
+
+            // Type checking
+            if !Type::deep_equality(&val_type, &target_type) {
                 let msg = format!("Cannot bind value of type {} to variable of type {}.",
-                    val_type.to_str(), target_type.to_str());
-                return Err(RuntimeError { token: typename.clone(), msg });
+                    val_type.to_string(), target_type.to_string());
+                return Err(RuntimeError { token: typename[0].clone(), msg });
             }
+
+            Some(target_type)
+        } else {
+            None
+        };
+
+        // Set the return type if we are binding an abstraction
+        match (&mut val, target_type) {
+            (Val::Abstraction(_, return_val),
+            Some(Type::Abstraction(_, target_return))) => {
+                *return_val = target_return.clone();
+            }
+            _ => {}
         }
 
         self.env.borrow_mut().push((binding.name.clone(), val));
@@ -220,11 +289,29 @@ impl Interpreter {
             _ => panic!("INTERPRETER FAILED in visit_primary: Found token not of type String, Number, or Identifier.")
         }
     }
+    fn workout_return_type(expr: &Expr) -> Result<Option<Box<Type>>, RuntimeError> {
+        match expr {
+            Expr::Abstraction(def) => {
+                let argtype = Type::from_tokens(&def.argtype)?;
+                Ok(Some(Box::new(Type::Abstraction(Box::new(argtype), None))))
+            }
+            _ => Ok(None)
+        }
+    }
+    pub fn visit_abstraction(&self, def: &AbstractionDef)-> Result<Val, RuntimeError> {
+        let arg = def.arg.clone();
+        let argtype = Type::from_tokens(&def.argtype)?;
+        let body = def.body.clone();
+        let return_type = Self::workout_return_type(&body)?;
+
+        Ok(Val::Abstraction(Abstraction { arg, argtype, body }, return_type))
+    }
     pub fn interpret(&self, expr: &Expr) -> Result<Val, RuntimeError> {
         match expr {
             Expr::Binary(binary) => Ok(self.visit_binary(&(*binary))?),
             Expr::Binding(binding) => Ok(self.visit_binding(&(*binding))?),
             Expr::Primary(tok) => Ok(self.visit_primary(tok)?),
+            Expr::Abstraction(def) => Ok(self.visit_abstraction(&(*def))?),
         }
     }
 }

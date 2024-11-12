@@ -18,6 +18,7 @@ impl Lcalc {
         let err_msg = format!("Error:{}:{}: {}", line, col, msg);
         self.report_error(err_msg);
     }
+    // TODO: seperate out into run_file and run
     pub fn run_file(&self, program: &str) -> u8 {
         let scanner = Scanner::new(&program);
         let tokens = match scanner.scan_tokens() {
@@ -45,7 +46,7 @@ impl Lcalc {
                 return 1;
             }
         };
-        println!("\n{}", val.to_string());
+        println!("\n({}) {}", val.to_type().to_string(), val.to_string());
 
         return 0;
     }
