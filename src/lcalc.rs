@@ -14,8 +14,12 @@ impl Lcalc {
     pub fn report_error(&self, err_msg: String) {
         println!("{}", err_msg);
     }
-    pub fn gen_error(&self, line: usize, col: usize, msg: String) {
-        let err_msg = format!("Error:{}:{}: {}", line, col, msg);
+    pub fn gen_error(&self, line: usize, col: usize, msg: String, program: &str) {
+        let err_msg = format!(r#"
+Error:{}:{}: {}
+{}
+{}^
+        "#, line, col, msg, program.trim_end(), " ".repeat(col - 1));
         self.report_error(err_msg);
     }
     // TODO: seperate out into run_file and run
@@ -24,7 +28,7 @@ impl Lcalc {
         let tokens = match scanner.scan_tokens() {
             Ok(tokens) => tokens,
             Err(e) => {
-                self.gen_error(e.line, e.col, e.msg);
+                self.gen_error(e.line, e.col, e.msg, program);
                 return 1;
             }
         };
@@ -33,7 +37,7 @@ impl Lcalc {
         let expr = match parser.parse() {
             Ok(expr) => expr,
             Err(e) => {
-                self.gen_error(e.line, e.col, e.msg);
+                self.gen_error(e.line, e.col, e.msg, program);
                 return 1;
             }
         };
@@ -42,7 +46,7 @@ impl Lcalc {
         let val = match interpreter.interpret(&expr) {
             Ok(val) => val,
             Err(e) => {
-                self.gen_error(e.token.line, e.token.col, e.msg);
+                self.gen_error(e.token.line, e.token.col, e.msg, program);
                 return 1;
             }
         };
