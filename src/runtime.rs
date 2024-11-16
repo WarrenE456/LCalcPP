@@ -257,19 +257,17 @@ impl Interpreter {
             None
         };
 
-        // Set the return type if we are binding an abstraction
+        // Set the abstraction type
         match (&mut val, target_type) {
             (
-                Val::Abstraction(_, return_val),
-                Some(Some(Type::Abstraction(_, target_return)))
+                Val::Abstraction(abs, return_val),
+                Some(Some(Type::Abstraction(target_param, target_return)))
             ) => {
+                abs.paramtype = target_param.clone().map(|b| *b);
                 *return_val = target_return.clone();
             }
             _ => {}
         }
-
-        // TODO: remove
-        // self.env.borrow_mut().push((binding.name.clone(), val));
 
         Ok(
             if let Some(in_expr) = &binding.in_expr {
@@ -291,13 +289,6 @@ impl Interpreter {
                 Ok(Val::Unit)
             }
             TokenType::Identifer => {
-                // TODO: remove
-                // TODO: Stop granny shiftin', not double clutching like you should
-                // for (name, val) in self.env.borrow().iter().rev() {
-                //     if *name == tok.lexeme {
-                //         return Ok(val.clone())
-                //     }
-                // }
                 let msg = format!("Reference to unbound variable {}.", tok.lexeme);
                 Err(RuntimeError{ token: tok.clone(), msg })
 
@@ -345,18 +336,10 @@ impl Interpreter {
                             argument_type.to_string(), parameter_type.to_string());
                         return Err( RuntimeError { token: abstraction.param, msg })
                     }
+
                 }
-
-                // TODO: remove
-                // Add Keep track of the original stack position and push the arguments onto the stack.
-                // let stack_pos = self.env.borrow().len();
-
                 // Run the function
                 let return_val = self.interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?;
-
-                // TODO: remove
-                // Return the stack to its original 
-                // self.env.borrow_mut().resize(stack_pos, ("".to_string(), Val::Unit));
 
                 // Type check the return value
                 if let Some(target_return_t) = target_return_t {
