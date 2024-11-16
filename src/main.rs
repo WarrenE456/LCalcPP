@@ -1,3 +1,4 @@
+// TODO: fix strmul wtih 0
 pub mod scanner;
 pub mod lcalc;
 pub mod parser;

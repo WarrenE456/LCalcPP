@@ -225,7 +225,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Expr::Let(Box::new(Binding { name, typename, op, val, in_expr })))
+            Ok(Expr::Binding(Box::new(Binding { name, typename, op, val, in_expr })))
         }   
         else {
             self.lambda()

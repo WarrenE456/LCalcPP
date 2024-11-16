@@ -78,19 +78,20 @@ impl Type {
     }
     pub fn deep_equality(target: &Self, checked: &Self) -> bool {
         match (target, checked) {
-            (Type::Abstraction(a, b),
-             Type::Abstraction(c, d)) => {
-                if *a != *c {
-                    false
-                }
-                else {
-                    if let (Some(b), Some(d)) = (b, d) {
-                        Self::deep_equality(b, d)
-                    }
-                    else {
-                        true
-                    }
-                }
+            (Type::Abstraction(param1, return1),
+             Type::Abstraction(param2, return2)) => {
+                let params_type_check = if let (Some(p1), Some(p2)) = (param1, param2) {
+                    Type::deep_equality(p1, p2)
+                } else {
+                    true
+                };
+                if !params_type_check { return false; }
+                let returns_type_check = if let (Some(r1), Some(r2)) = (return1, return2) {
+                    Type::deep_equality(r1, r2)
+                } else {
+                    true
+                };
+                returns_type_check
             }
             (a, b) => a == b,
         }
@@ -139,12 +140,11 @@ fn str_mul(s: &mut String, n: f64) -> Result<(), String> {
 
 // TODO: Get rid of env and replace with beta reduction
 pub struct Interpreter {
-    env: RefCell<Vec<(String, Val)>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter { env: RefCell::new(vec![]) }
+        Interpreter {}
     }
     pub fn visit_binary(& self, binary: & Binary) -> Result<Val, RuntimeError> {
         let left = self.interpret(&binary.left)?;
@@ -238,7 +238,7 @@ impl Interpreter {
             _ => panic!("INTERPRETER FAILED in visist_binary: Operator '{}' type did not match any.", binary.op.lexeme),
         }
     }
-    pub fn visit_let(&self, binding: &Binding) -> Result<Val, RuntimeError> {
+    pub fn visit_binding(&self, binding: &Binding) -> Result<Val, RuntimeError> {
         let mut val = self.interpret(&binding.val)?;
 
         let val_type = val.to_type();
@@ -268,11 +268,12 @@ impl Interpreter {
             _ => {}
         }
 
-        self.env.borrow_mut().push((binding.name.clone(), val));
+        // TODO: remove
+        // self.env.borrow_mut().push((binding.name.clone(), val));
 
         Ok(
             if let Some(in_expr) = &binding.in_expr {
-                self.interpret(&in_expr)?
+                self.interpret(&in_expr.beta_reduction(&binding.name, &val))?
             } else {
                 Val::Unit
             }
@@ -290,12 +291,13 @@ impl Interpreter {
                 Ok(Val::Unit)
             }
             TokenType::Identifer => {
+                // TODO: remove
                 // TODO: Stop granny shiftin', not double clutching like you should
-                for (name, val) in self.env.borrow().iter().rev() {
-                    if *name == tok.lexeme {
-                        return Ok(val.clone())
-                    }
-                }
+                // for (name, val) in self.env.borrow().iter().rev() {
+                //     if *name == tok.lexeme {
+                //         return Ok(val.clone())
+                //     }
+                // }
                 let msg = format!("Reference to unbound variable {}.", tok.lexeme);
                 Err(RuntimeError{ token: tok.clone(), msg })
 
@@ -345,14 +347,16 @@ impl Interpreter {
                     }
                 }
 
+                // TODO: remove
                 // Add Keep track of the original stack position and push the arguments onto the stack.
-                let stack_pos = self.env.borrow().len();
+                // let stack_pos = self.env.borrow().len();
 
                 // Run the function
                 let return_val = self.interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?;
 
+                // TODO: remove
                 // Return the stack to its original 
-                self.env.borrow_mut().resize(stack_pos, ("".to_string(), Val::Unit));
+                // self.env.borrow_mut().resize(stack_pos, ("".to_string(), Val::Unit));
 
                 // Type check the return value
                 if let Some(target_return_t) = target_return_t {
@@ -378,7 +382,7 @@ impl Interpreter {
     pub fn interpret(&self, expr: &Expr) -> Result<Val, RuntimeError> {
         match expr {
             Expr::Binary(binary) => Ok(self.visit_binary(&(*binary))?),
-            Expr::Let(binding) => Ok(self.visit_let(&(*binding))?),
+            Expr::Binding(binding) => Ok(self.visit_binding(&(*binding))?),
             Expr::Primary(tok) => Ok(self.visit_primary(tok)?),
             Expr::Abstraction(def) => Ok(self.visit_abstraction(&(*def))?),
             Expr::Call(call) => Ok(self.visit_call(&(*call))?),

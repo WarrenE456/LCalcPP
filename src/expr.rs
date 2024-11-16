@@ -34,7 +34,7 @@ pub struct Call {
 pub enum Expr {
     Primary(Token),
     Binary(Box<Binary>),
-    Let(Box<Binding>),
+    Binding(Box<Binding>),
     Abstraction(Box<AbstractionDef>),
     Call(Box<Call>),
     Beta(Box<Val>),
@@ -62,21 +62,29 @@ impl Expr {
                     right: bin.right.beta_reduction(name, val)
                 }))
             }
-            Expr::Let(let_expr) => {
-                Expr::Let(Box::new(Binding{
-                    name: let_expr.name.clone(),
-                    typename: let_expr.typename.clone(),
-                    op: let_expr.op.clone(),
-                    val: let_expr.val.beta_reduction(name, val),
-                    in_expr: let_expr.in_expr.clone().map(|v| v.beta_reduction(name, val)),
-                }))
+            Expr::Binding(bind) => {
+                if *name != bind.name {
+                    Expr::Binding(Box::new(Binding{
+                        name: bind.name.clone(),
+                        typename: bind.typename.clone(),
+                        op: bind.op.clone(),
+                        val: bind.val.beta_reduction(name, val),
+                        in_expr: bind.in_expr.clone().map(|v| v.beta_reduction(name, val)),
+                    }))
+                } else {
+                    self.clone()
+                }
             }
             Expr::Abstraction(abs) => {
-                Expr::Abstraction(Box::new(AbstractionDef {
-                    param: abs.param.clone(),
-                    paramtype: abs.paramtype.clone(),
-                    body: abs.body.beta_reduction(name, val),
-                }))
+                if *name != abs.param.lexeme {
+                    Expr::Abstraction(Box::new(AbstractionDef {
+                        param: abs.param.clone(),
+                        paramtype: abs.paramtype.clone(),
+                        body: abs.body.beta_reduction(name, val),
+                    }))
+                } else {
+                    self.clone()
+                }
             }
             Expr::Call(call) => {
                 Expr::Call(Box::new(Call {
