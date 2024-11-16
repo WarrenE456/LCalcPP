@@ -46,7 +46,7 @@ fn is_numeric(c: u8) -> bool {
 }
 
 fn is_alpha(c: u8) -> bool {
-    (b'a' <= c && c <= b'z') || (b'A' <= c && c <= b'Z')
+    (b'a' <= c && c <= b'z') || (b'A' <= c && c <= b'Z') || c == b'_'
 }
 
 fn is_alpha_numeric(c: u8) -> bool {

@@ -46,7 +46,7 @@ impl Lcalc {
                 return 1;
             }
         };
-        println!("\n({}) {}", val.to_type().to_string(), val.to_string());
+        println!("({}) {}\n", val.to_type().to_string(), val.to_string());
 
         return 0;
     }

@@ -12,8 +12,8 @@ use std::cell::Cell;
 * binding -> "let" IDENTIFIER ( ":" type )? "=" lambda | lambda;
 * lambda -> "L" IDENTIFIER ":" type "." expr | term ";"
 * term -> factor ( ("+" | "-") factor )* ;
-* factor -> group ( ("*" | "/") group )* ;
-* call -> IDENTIFIER group* | group
+* factor -> apply ( ("*" | "/") apply )* ;
+* apply -> group group* ;
 * group -> "(" expr ")" | primary ;
 * primary -> STRING | NUMBER | IDENTIFIER ;
 *
@@ -108,15 +108,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // call -> IDENTIFIER group* | group
-    // TODO
-
-    // factor -> group ( ("*" | "/") group )* ;
-    fn factor(&self) -> Result<Expr, ParserError> {
+    // apply -> group group* ;
+    fn apply(&self) -> Result<Expr, ParserError> {
         let mut expr = self.group()?;
+        while self.any_match(&[TokenType::LParen, TokenType::Number, TokenType::String, TokenType::Identifer]) {
+            expr = Expr::Call(Box::new(Call { callee: expr, arg: self.group()? }));
+        }
+        Ok(expr)
+    }
+
+    // factor -> apply ( ("*" | "/") apply )* ;
+    fn factor(&self) -> Result<Expr, ParserError> {
+        let mut expr = self.apply()?;
         while self.any_match(&[TokenType::Star, TokenType::Slash]) {
             let op = self.advance();
-            let right = self.group()?;
+            let right = self.apply()?;
             expr = Expr::Binary( Box::new(Binary{left: expr, op, right}) )
         }
         Ok(expr)
@@ -161,17 +167,17 @@ impl<'a> Parser<'a> {
         if self.is_match(TokenType::Lambda) {
             let _ = self.advance();
 
-            let arg = self.expect(TokenType::Identifer).map_err(|e| {
+            let param = self.expect(TokenType::Identifer).map_err(|e| {
                 let msg = format!("Expected identifier an identifier after the lambda, found '{}'.", e.lexeme);
                 ParserError { line: e.line, col: e.col, msg }
-            })?.lexeme;
+            })?.clone();
 
             let _ = self.expect(TokenType::Colon).map_err(|e| {
                 let msg = format!("Expected a colon after the argument, found '{}'.", e.lexeme);
                 ParserError { line: e.line, col: e.col, msg }
             })?;
 
-            let argtype = self._type()?;
+            let paramtype = self._type()?;
 
             let _ = self.expect(TokenType::Dot).map_err(|e| {
                 let msg = format!("Expected a dot after the argument type, found '{}'.", e.lexeme);
@@ -180,7 +186,7 @@ impl<'a> Parser<'a> {
 
             let body = self.expr()?;
 
-            Ok(Expr::Abstraction(Box::new(AbstractionDef { arg, argtype, body })))
+            Ok(Expr::Abstraction(Box::new(AbstractionDef { param, paramtype, body })))
         } 
         else {
             Ok(self.term()?)

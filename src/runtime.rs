@@ -5,21 +5,17 @@ use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
 pub struct Abstraction {
-    pub arg: String,
-    pub argtype: Type,
+    pub param: Token,
+    pub paramtype: Type,
     pub body: Expr,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Val {
     Number(f64),
     String(String),
     Abstraction(Abstraction, Option<Box<Type>>), 
     Unit,
-}
-
-impl Val {
-
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -109,7 +105,7 @@ impl Val {
             Val::String(_) => Type::String,
             Val::Unit => Type::Unit,
             Val::Abstraction(abs, val) => {
-                Type::Abstraction(Box::new(abs.argtype.clone()), val.clone())
+                Type::Abstraction(Box::new(abs.paramtype.clone()), val.clone())
             }
         }
     }
@@ -292,19 +288,66 @@ impl Interpreter {
     fn workout_return_type(expr: &Expr) -> Result<Option<Box<Type>>, RuntimeError> {
         match expr {
             Expr::Abstraction(def) => {
-                let argtype = Type::from_tokens(&def.argtype)?;
+                let argtype = Type::from_tokens(&def.paramtype)?;
                 Ok(Some(Box::new(Type::Abstraction(Box::new(argtype), None))))
             }
             _ => Ok(None)
         }
     }
     pub fn visit_abstraction(&self, def: &AbstractionDef)-> Result<Val, RuntimeError> {
-        let arg = def.arg.clone();
-        let argtype = Type::from_tokens(&def.argtype)?;
+        let arg = def.param.clone();
+        let argtype = Type::from_tokens(&def.paramtype)?;
         let body = def.body.clone();
         let return_type = Self::workout_return_type(&body)?;
 
-        Ok(Val::Abstraction(Abstraction { arg, argtype, body }, return_type))
+        Ok(Val::Abstraction(Abstraction { param: arg, paramtype: argtype, body }, return_type))
+    }
+    // TODO fixed curried functions and add beta reduction
+    fn visit_call(&self, call: &Call) -> Result<Val, RuntimeError> {
+        let callee = self.interpret(&call.callee)?;
+        let arg = self.interpret(&call.arg)?;
+        match callee {
+            Val::Abstraction(abstraction, target_return_t) => {
+                // Type check the argument and parameter
+                let argument_type = arg.to_type();
+                let parameter_type = abstraction.paramtype;
+                if !Type::deep_equality(&argument_type, &parameter_type) {
+                    let msg = format!("Attempt to bind argument of type {} to parameter of type {}.",
+                        argument_type.to_string(), parameter_type.to_string());
+                    return Err( RuntimeError { token: abstraction.param, msg })
+                }
+
+                // TODO: replace everything with beta reduction and remove the need for the stack
+                // entirely.
+                // Add Keep track of the original stack position and push the arguments onto the stack.
+                let stack_pos = self.env.borrow().len();
+
+                // Run the function
+                let return_val = self.interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?;
+
+                // Return the stack to its original 
+                self.env.borrow_mut().resize(stack_pos, ("".to_string(), Val::Unit));
+
+                // Type check the return value
+                if let Some(target_return_t) = target_return_t {
+                    let return_t = return_val.to_type();
+                    if !Type::deep_equality(&return_t, &(*target_return_t)) {
+                        let _msg = format!("Function returned type {}, expected type {}.",
+                            return_t.to_string(), target_return_t.to_string()
+                        );
+                        panic!("Function returned {}, expected {}.", return_t.to_string(), target_return_t.to_string());
+                        // TODO
+                        // return Err( RuntimeError { token: , msg })
+                    }
+                }
+
+                Ok(return_val)
+            }
+            _ => {
+                // TODO
+                panic!("Attempt to call non-abstraction.");
+            }
+        }
     }
     pub fn interpret(&self, expr: &Expr) -> Result<Val, RuntimeError> {
         match expr {
@@ -312,6 +355,8 @@ impl Interpreter {
             Expr::Binding(binding) => Ok(self.visit_binding(&(*binding))?),
             Expr::Primary(tok) => Ok(self.visit_primary(tok)?),
             Expr::Abstraction(def) => Ok(self.visit_abstraction(&(*def))?),
+            Expr::Call(call) => Ok(self.visit_call(&(*call))?),
+            Expr::Beta(val) => Ok((**val).clone()),
         }
     }
 }
