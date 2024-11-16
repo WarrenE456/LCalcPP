@@ -172,13 +172,13 @@ impl<'a> Parser<'a> {
                 ParserError { line: e.line, col: e.col, msg }
             })?.clone();
 
-            // TODO: make this type optional
-            let _ = self.expect(TokenType::Colon).map_err(|e| {
-                let msg = format!("Expected a colon after the argument, found '{}'.", e.lexeme);
-                ParserError { line: e.line, col: e.col, msg }
-            })?;
-
-            let paramtype = self._type()?;
+            let paramtype = 
+            if self.is_match(TokenType::Colon) { 
+                let _ = self.advance();
+                Some(self._type()?)
+            } else {
+                None
+            };
 
             let _ = self.expect(TokenType::Dot).map_err(|e| {
                 let msg = format!("Expected a dot after the argument type, found '{}'.", e.lexeme);

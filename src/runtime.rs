@@ -301,15 +301,24 @@ impl Interpreter {
     fn workout_return_type(expr: &Expr) -> Result<Option<Box<Type>>, RuntimeError> {
         match expr {
             Expr::Abstraction(def) => {
-                let argtype = Type::from_tokens(&def.paramtype)?;
-                Ok(Some(Box::new(Type::Abstraction(argtype.map(|v| Box::new(v)), None))))
+                let argtype = def.paramtype
+                    .clone()
+                    .map(|v| Type::from_tokens(&v))
+                    .transpose()?
+                    .flatten()
+                    .map(|v| Box::new(v));
+                Ok(Some(Box::new(Type::Abstraction(argtype, None))))
             }
             _ => Ok(None)
         }
     }
     pub fn visit_abstraction(&self, def: &AbstractionDef)-> Result<Val, RuntimeError> {
         let arg = def.param.clone();
-        let argtype = Type::from_tokens(&def.paramtype)?;
+        let argtype = def.paramtype
+            .clone()
+            .map(|v| Type::from_tokens(&v))
+            .transpose()?
+            .flatten();
         let body = def.body.clone();
         let return_type = Self::workout_return_type(&body)?;
 

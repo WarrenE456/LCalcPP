@@ -19,7 +19,7 @@ pub struct Binding {
 #[derive(Debug, Clone)]
 pub struct AbstractionDef {
     pub param: Token,
-    pub paramtype: Vec<Token>,
+    pub paramtype: Option<Vec<Token>>,
     pub body: Expr,
 }
 
