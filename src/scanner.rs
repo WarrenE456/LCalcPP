@@ -1,4 +1,3 @@
-// TODO: fix identifier that start with 'L'
 use std::cell::Cell;
 use std::collections::HashMap;
 
@@ -102,7 +101,6 @@ impl<'a> Scanner<'a> {
                 b'+' => Some(Plus),
                 b'*' => Some(Star),
                 b'/' => Some(Slash),
-                b'L' => Some(Lambda),
                 b'.' => Some(Dot),
                 b'=' => Some(Equal),
                 b':' => Some(Colon),

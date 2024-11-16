@@ -130,15 +130,11 @@ fn str_mul(s: &mut String, n: f64) -> Result<(), String> {
         Err("Attempt to multiply a string by anything but a positive integer.".to_string())
     } else {
         let n: usize = n as usize;
-        let sub = s.clone();
-        for _ in 1..n {
-            s.push_str(&sub);
-        }
+        *s = s.repeat(n);
         Ok(())
     }
 }
 
-// TODO: Get rid of env and replace with beta reduction
 pub struct Interpreter {
 }
 

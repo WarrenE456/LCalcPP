@@ -1,4 +1,4 @@
-// TODO: fix strmul wtih 0
+// TODO: negation op..
 pub mod scanner;
 pub mod lcalc;
 pub mod parser;

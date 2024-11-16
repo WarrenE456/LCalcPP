@@ -39,6 +39,8 @@ Error:{}:{}: {}
             }
         };
 
+        println!("{:?}", tokens);
+
         let parser = Parser::new(&tokens);
         let expr = match parser.parse() {
             Ok(expr) => expr,
