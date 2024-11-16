@@ -7,9 +7,8 @@ use std::cell::Cell;
 * Context-free Grammar
 *
 * program -> expr EOF ;
-* expr -> in ;
-* in -> binding ( "in" binding )* ;
-* binding -> "let" IDENTIFIER ( ":" type )? "=" lambda | lambda;
+* expr -> binding;
+* binding -> "let" IDENTIFIER ( ":" type )? "=" lambda ( "in" binding )? | lambda;
 * lambda -> "L" IDENTIFIER ":" type "." expr | term ";"
 * term -> factor ( ("+" | "-") factor )* ;
 * factor -> apply ( ("*" | "/") apply )* ;
@@ -195,7 +194,7 @@ impl<'a> Parser<'a> {
     }
 
 
-    // binding -> "let" IDENTIFIER ( ":" type ) "=" lambda | lambda;
+    // binding -> "let" IDENTIFIER ( ":" type )? "=" lambda ( "in" binding )? | lambda;
     fn binding(&self) -> Result<Expr, ParserError> {
         if self.is_match(TokenType::Let) {
             let _ = self.advance(); 
@@ -219,27 +218,23 @@ impl<'a> Parser<'a> {
 
             let val = self.lambda()?;
 
-            Ok(Expr::Binding(Box::new(Binding { name, typename, op, val })))
+            let in_expr = if self.is_match(TokenType::In) {
+                let _ = self.advance();
+                Some(self.binding()?)
+            } else {
+                None
+            };
+
+            Ok(Expr::Let(Box::new(Binding { name, typename, op, val, in_expr })))
         }   
         else {
             self.lambda()
         }
     }
 
-    // in -> binding ( "in" binding )* ;
-    fn _in(&self) -> Result<Expr, ParserError> {
-        let mut expr = self.binding()?;
-        while self.is_match(TokenType::In) {
-            let op = self.advance();
-            let right = self.binding()?;
-            expr = Expr::Binary(Box::new(Binary { left: expr, op, right }));
-        }
-        Ok(expr)
-    }
-
     // expr -> in ;
     fn expr(&self) -> Result<Expr, ParserError> {
-        self._in()
+        self.binding()
     }
 
     // program -> expr EOF ;

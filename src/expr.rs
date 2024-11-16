@@ -14,6 +14,7 @@ pub struct Binding {
     pub typename: Option<Vec<Token>>,
     pub op: Token,
     pub val: Expr,
+    pub in_expr: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +34,7 @@ pub struct Call {
 pub enum Expr {
     Primary(Token),
     Binary(Box<Binary>),
-    Binding(Box<Binding>),
+    Let(Box<Binding>),
     Abstraction(Box<AbstractionDef>),
     Call(Box<Call>),
     Beta(Box<Val>),
@@ -61,12 +62,13 @@ impl Expr {
                     right: bin.right.beta_reduction(name, val)
                 }))
             }
-            Expr::Binding(bin) => {
-                Expr::Binding(Box::new(Binding{
-                    name: bin.name.clone(),
-                    typename: bin.typename.clone(),
-                    op: bin.op.clone(),
-                    val: bin.val.beta_reduction(name, val),
+            Expr::Let(let_expr) => {
+                Expr::Let(Box::new(Binding{
+                    name: let_expr.name.clone(),
+                    typename: let_expr.typename.clone(),
+                    op: let_expr.op.clone(),
+                    val: let_expr.val.beta_reduction(name, val),
+                    in_expr: let_expr.in_expr.clone().map(|v| v.beta_reduction(name, val)),
                 }))
             }
             Expr::Abstraction(abs) => {

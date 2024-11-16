@@ -235,11 +235,10 @@ impl Interpreter {
                     }
                 }
             }
-            In => Ok(right),
             _ => panic!("INTERPRETER FAILED in visist_binary: Operator '{}' type did not match any.", binary.op.lexeme),
         }
     }
-    pub fn visit_binding(&self, binding: &Binding) -> Result<Val, RuntimeError> {
+    pub fn visit_let(&self, binding: &Binding) -> Result<Val, RuntimeError> {
         let mut val = self.interpret(&binding.val)?;
 
         let val_type = val.to_type();
@@ -271,7 +270,13 @@ impl Interpreter {
 
         self.env.borrow_mut().push((binding.name.clone(), val));
 
-        Ok(Val::Unit)
+        Ok(
+            if let Some(in_expr) = &binding.in_expr {
+                self.interpret(&in_expr)?
+            } else {
+                Val::Unit
+            }
+        )
     }
     pub fn visit_primary(&self, tok: &Token) -> Result<Val, RuntimeError> {
         match tok.t {
@@ -373,7 +378,7 @@ impl Interpreter {
     pub fn interpret(&self, expr: &Expr) -> Result<Val, RuntimeError> {
         match expr {
             Expr::Binary(binary) => Ok(self.visit_binary(&(*binary))?),
-            Expr::Binding(binding) => Ok(self.visit_binding(&(*binding))?),
+            Expr::Let(binding) => Ok(self.visit_let(&(*binding))?),
             Expr::Primary(tok) => Ok(self.visit_primary(tok)?),
             Expr::Abstraction(def) => Ok(self.visit_abstraction(&(*def))?),
             Expr::Call(call) => Ok(self.visit_call(&(*call))?),
