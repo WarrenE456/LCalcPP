@@ -35,6 +35,7 @@ fn main() -> ExitCode {
     else if args.len() == 1 {
         let lcalc = Lcalc::new();
         lcalc.run_prompt();
+        // Unreachable due to infinite loop in Lcalc::run_prompt
         return ExitCode::from(0);
     }
     else {
