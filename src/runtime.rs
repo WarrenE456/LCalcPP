@@ -6,7 +6,7 @@ use std::cell::RefCell;
 #[derive(Debug, Clone)]
 pub struct Abstraction {
     pub param: Token,
-    pub paramtype: Type,
+    pub paramtype: Option<Type>,
     pub body: Expr,
 }
 
@@ -22,33 +22,39 @@ pub enum Val {
 pub enum Type {
     Number,
     String,
-    Abstraction(Box<Type>, Option<Box<Type>>),
+    Abstraction(Option<Box<Type>>, Option<Box<Type>>),
     Unit,
 }
 
 impl Type {
-    pub fn from_typename(typename: &str) -> Option<Self> {
+    pub fn from_typename(typename: &str) -> Option<Option<Self>> {
         match typename {
-            "Number" => Some(Type::Number),
-            "String" => Some(Type::String),
-            "Unit"   => Some(Type::Unit),
+            "Number" => Some(Some(Type::Number)),
+            "String" => Some(Some(Type::String)),
+            "Unit"   => Some(Some(Type::Unit)),
+            "Any"    => Some(None),
             _ => None,
         }
     }
-    pub fn from_slice(types: &[Type]) -> Type {
+    pub fn from_slice(types: &[Option<Type>]) -> Option<Type> {
         if types.len() == 0 {
-            Type::Unit
+            Some(Type::Unit)
         }
         else if types.len() == 1 {
             types[0].clone()
         }
         else {
-            Type::Abstraction(Box::new(types[0].clone()), Some(Box::new(Self::from_slice(&types[1..]))))
+            Some(
+                Type::Abstraction(
+                    types.first().unwrap().clone().map(|v| Box::new(v)),
+                    Box::new(Self::from_slice(&types[1..])).map(|v| Box::new(v))
+                )
+            )
         }
 
     }
-    pub fn from_tokens(tokens: &Vec<Token>) -> Result<Type, RuntimeError> {
-        let mut types = Vec::<Type>::new();
+    pub fn from_tokens(tokens: &Vec<Token>) -> Result<Option<Type>, RuntimeError> {
+        let mut types = Vec::new();
         for tok in tokens.iter() {
             let new_argt = Type::from_typename(&tok.lexeme).ok_or_else(|| {
                 let msg = format!("Reference to unbound type '{}'.", tok.lexeme);
@@ -65,8 +71,9 @@ impl Type {
             Type::Unit   =>   "Unit".to_string(),
             Type::Abstraction(a, b) =>
                 format!("({} -> {})",
-                    (*a).to_string(),
-                    if let Some(b) = b { (*b).to_string() } else { "{unknown}".to_string() } ),
+                    if let Some(a) = a { (*a).to_string() } else { "Any".to_string() },
+                    if let Some(b) = b { (*b).to_string() } else { "Any".to_string() }
+                ),
         }
     }
     pub fn deep_equality(target: &Self, checked: &Self) -> bool {
@@ -105,7 +112,7 @@ impl Val {
             Val::String(_) => Type::String,
             Val::Unit => Type::Unit,
             Val::Abstraction(abs, val) => {
-                Type::Abstraction(Box::new(abs.paramtype.clone()), val.clone())
+                Type::Abstraction(abs.paramtype.clone().map(|v| Box::new(v)), val.clone())
             }
         }
     }
@@ -130,6 +137,7 @@ fn str_mul(s: &mut String, n: f64) -> Result<(), String> {
     }
 }
 
+// TODO: Get rid of env and replace with beta reduction
 pub struct Interpreter {
     env: RefCell<Vec<(String, Val)>>,
 }
@@ -237,14 +245,14 @@ impl Interpreter {
         let val_type = val.to_type();
         let target_type =  if let Some(typename) = &binding.typename {
             let target_type = Type::from_tokens(typename)?;
-
-            // Type checking
-            if !Type::deep_equality(&val_type, &target_type) {
-                let msg = format!("Cannot bind value of type {} to variable of type {}.",
-                    val_type.to_string(), target_type.to_string());
-                return Err(RuntimeError { token: typename[0].clone(), msg });
+            if let Some(target_type) = &target_type {
+                // Type checking
+                if !Type::deep_equality(&val_type, &target_type) {
+                    let msg = format!("Cannot bind value of type {} to variable of type {}.",
+                        val_type.to_string(), target_type.to_string());
+                    return Err(RuntimeError { token: typename[0].clone(), msg });
+                }
             }
-
             Some(target_type)
         } else {
             None
@@ -252,8 +260,10 @@ impl Interpreter {
 
         // Set the return type if we are binding an abstraction
         match (&mut val, target_type) {
-            (Val::Abstraction(_, return_val),
-            Some(Type::Abstraction(_, target_return))) => {
+            (
+                Val::Abstraction(_, return_val),
+                Some(Some(Type::Abstraction(_, target_return)))
+            ) => {
                 *return_val = target_return.clone();
             }
             _ => {}
@@ -271,6 +281,9 @@ impl Interpreter {
             TokenType::Number => {
                 Ok(Val::Number(tok.lexeme.parse().unwrap()))
             }
+            TokenType::Unit => {
+                Ok(Val::Unit)
+            }
             TokenType::Identifer => {
                 // TODO: Stop granny shiftin', not double clutching like you should
                 for (name, val) in self.env.borrow().iter().rev() {
@@ -282,14 +295,14 @@ impl Interpreter {
                 Err(RuntimeError{ token: tok.clone(), msg })
 
             }
-            _ => panic!("INTERPRETER FAILED in visit_primary: Found token not of type String, Number, or Identifier.")
+            _ => panic!("INTERPRETER FAILED in visit_primary: Found token not of type String, Number, Unit, or Identifier.")
         }
     }
     fn workout_return_type(expr: &Expr) -> Result<Option<Box<Type>>, RuntimeError> {
         match expr {
             Expr::Abstraction(def) => {
                 let argtype = Type::from_tokens(&def.paramtype)?;
-                Ok(Some(Box::new(Type::Abstraction(Box::new(argtype), None))))
+                Ok(Some(Box::new(Type::Abstraction(argtype.map(|v| Box::new(v)), None))))
             }
             _ => Ok(None)
         }
@@ -302,7 +315,6 @@ impl Interpreter {
 
         Ok(Val::Abstraction(Abstraction { param: arg, paramtype: argtype, body }, return_type))
     }
-    // TODO fixed curried functions and add beta reduction
     fn visit_call(&self, call: &Call) -> Result<Val, RuntimeError> {
         let callee = self.interpret(&call.callee)?;
         let arg = self.interpret(&call.arg)?;
@@ -311,14 +323,14 @@ impl Interpreter {
                 // Type check the argument and parameter
                 let argument_type = arg.to_type();
                 let parameter_type = abstraction.paramtype;
-                if !Type::deep_equality(&argument_type, &parameter_type) {
-                    let msg = format!("Attempt to bind argument of type {} to parameter of type {}.",
-                        argument_type.to_string(), parameter_type.to_string());
-                    return Err( RuntimeError { token: abstraction.param, msg })
+                if let Some(parameter_type) = &parameter_type {
+                    if !Type::deep_equality(&argument_type, &parameter_type) {
+                        let msg = format!("Attempt to bind argument of type {} to parameter of type {}.",
+                            argument_type.to_string(), parameter_type.to_string());
+                        return Err( RuntimeError { token: abstraction.param, msg })
+                    }
                 }
 
-                // TODO: replace everything with beta reduction and remove the need for the stack
-                // entirely.
                 // Add Keep track of the original stack position and push the arguments onto the stack.
                 let stack_pos = self.env.borrow().len();
 

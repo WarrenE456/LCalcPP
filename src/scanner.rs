@@ -1,19 +1,19 @@
-// TODO unit type scanning
 use std::cell::Cell;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
     // One character
-    Plus,   Star,   Slash,  Dot,
-    Equal,  Colon,  LParen, RParen,
+    Plus,   Star,   Slash,
+    Dot,    Equal,  Colon,
 
     // One or two chararacter
     Minus,  Arrow,
 
     // Variable characters or keyword
     String, Number, In, Let,
-    Type, Lambda, Identifer,
+    Type,   Lambda, Identifer,
+    LParen, RParen, Unit, Any,
 
     // Misc.
     EOF
@@ -105,11 +105,11 @@ impl<'a> Scanner<'a> {
                 b'.' => Some(Dot),
                 b'=' => Some(Equal),
                 b':' => Some(Colon),
-                b'(' => Some(LParen),
-                b')' => Some(RParen),
 
                 // One or two characters
                 b'-' => Some(if self.is_match(b'>') { self.advance(); Arrow} else { Minus }),
+                b'(' => Some(if self.is_match(b')') { self.advance(); Unit} else { LParen }),
+                b')' => Some(RParen), // Isn't actual two characters, but I want it to be with LParen
 
                 // Identifiers and keywords
 

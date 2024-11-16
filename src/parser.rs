@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
 
     // primary -> STRING | NUMBER | IDENTIFIER ;
     fn primary(&self) -> Result<Expr, ParserError> {
-        if self.any_match(&[TokenType::String, TokenType::Number, TokenType::Identifer]) {
+        if self.any_match(&[TokenType::String, TokenType::Number, TokenType::Identifer, TokenType::Unit]) {
             Ok(Expr::Primary(self.advance()))
         }
         else {
@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
     // apply -> group group* ;
     fn apply(&self) -> Result<Expr, ParserError> {
         let mut expr = self.group()?;
-        while self.any_match(&[TokenType::LParen, TokenType::Number, TokenType::String, TokenType::Identifer]) {
+        while self.any_match(&[TokenType::LParen, TokenType::Number, TokenType::String, TokenType::Identifer, TokenType::Unit]) {
             expr = Expr::Call(Box::new(Call { callee: expr, arg: self.group()? }));
         }
         Ok(expr)
@@ -172,6 +172,7 @@ impl<'a> Parser<'a> {
                 ParserError { line: e.line, col: e.col, msg }
             })?.clone();
 
+            // TODO: make this type optional
             let _ = self.expect(TokenType::Colon).map_err(|e| {
                 let msg = format!("Expected a colon after the argument, found '{}'.", e.lexeme);
                 ParserError { line: e.line, col: e.col, msg }
