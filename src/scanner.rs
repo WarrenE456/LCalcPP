@@ -34,6 +34,12 @@ pub struct Token {
     pub col: usize,
 } 
 
+impl Token {
+    pub fn garbage() -> Self {
+        Token { t: TokenType::Identifer, lexeme: "".to_string(), line: 0, col: 0 }
+    }
+}
+
 pub struct Scanner<'a> {
     program: &'a[u8],
     cur: Cell<usize>,

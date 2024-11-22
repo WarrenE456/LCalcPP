@@ -15,11 +15,14 @@ impl Lcalc {
         println!("{}", err_msg);
     }
     pub fn gen_error(&self, line: usize, col: usize, msg: String, program: &str) {
-        let err_msg = format!(r#"
-Error:{}:{}: {}
-{}
-{}^
-        "#, line, col, msg, program.trim_end(), " ".repeat(col - 1));
+        let error_bubble = if col > 0 && line > 0 {
+            format!("{}\n{}^",
+                program.trim_end(), " ".repeat(col - 1)
+            )
+        } else {
+            "".to_string()
+        };
+        let err_msg = format!("\nError:{}:{}: {}\n{}\n", line, col, msg, error_bubble);
         self.report_error(err_msg);
     }
     pub fn run_file(&self, program: &str,) -> u8 {
@@ -38,8 +41,6 @@ Error:{}:{}: {}
                 return Err(1);
             }
         };
-
-        println!("{:?}", tokens);
 
         let parser = Parser::new(&tokens);
         let expr = match parser.parse() {

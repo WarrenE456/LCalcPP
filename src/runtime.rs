@@ -1,7 +1,8 @@
 use crate::expr::*;
+use crate::builtin::*;
 use crate::scanner::{Token, TokenType};
 
-use std::cell::RefCell;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Abstraction {
@@ -15,6 +16,7 @@ pub enum Val {
     Number(f64),
     String(String),
     Abstraction(Abstraction, Option<Box<Type>>), 
+    BuiltIn(BuiltIn),
     Unit,
 }
 
@@ -35,6 +37,22 @@ impl Type {
             "Any"    => Some(None),
             _ => None,
         }
+    }
+    pub fn new_false() -> Val {
+        let body = Expr::Abstraction(
+            Box::new(
+                AbstractionDef {
+                    param: Token { t: TokenType::Identifer, lexeme: "b".to_string(), line: 0, col: 0 },
+                    paramtype: None,
+                    body: Expr::Primary(Token { t: TokenType::Identifer, lexeme: "b".to_string(), line: 0, col: 0 })
+                }
+            )
+        );
+        Val::Abstraction(Abstraction {
+            param: Token { t: TokenType::Identifer, lexeme: "a".to_string(), line: 0, col: 0 },
+            paramtype: None,
+            body
+        }, None)
     }
     pub fn from_slice(types: &[Option<Type>]) -> Option<Type> {
         if types.len() == 0 {
@@ -105,6 +123,7 @@ impl Val {
             Val::String(s) => s.clone(),
             Val::Unit => "()".to_string(),
             Val::Abstraction(_, _) => "<abstraction>".to_string(),
+            Val::BuiltIn(_)        => "<built-in>".to_string(),
         }
     }
     pub fn to_type(&self) -> Type {
@@ -115,7 +134,40 @@ impl Val {
             Val::Abstraction(abs, val) => {
                 Type::Abstraction(abs.paramtype.clone().map(|v| Box::new(v)), val.clone())
             }
+            Val::BuiltIn(b) => b.to_type()
         }
+    }
+    pub fn new_true() -> Val {
+        let body = Expr::Abstraction(
+            Box::new(
+                AbstractionDef {
+                    param: Token { t: TokenType::Identifer, lexeme: "b".to_string(), line: 0, col: 0 },
+                    paramtype: None,
+                    body: Expr::Primary(Token { t: TokenType::Identifer, lexeme: "a".to_string(), line: 0, col: 0 })
+                }
+            )
+        );
+        Val::Abstraction(Abstraction {
+            param: Token { t: TokenType::Identifer, lexeme: "a".to_string(), line: 0, col: 0 },
+            paramtype: None,
+            body
+        }, None)
+    }
+    pub fn new_false() -> Val {
+        let body = Expr::Abstraction(
+            Box::new(
+                AbstractionDef {
+                    param: Token { t: TokenType::Identifer, lexeme: "b".to_string(), line: 0, col: 0 },
+                    paramtype: None,
+                    body: Expr::Primary(Token { t: TokenType::Identifer, lexeme: "b".to_string(), line: 0, col: 0 })
+                }
+            )
+        );
+        Val::Abstraction(Abstraction {
+            param: Token { t: TokenType::Identifer, lexeme: "a".to_string(), line: 0, col: 0 },
+            paramtype: None,
+            body
+        }, None)
     }
 }
 
@@ -136,11 +188,15 @@ fn str_mul(s: &mut String, n: f64) -> Result<(), String> {
 }
 
 pub struct Interpreter {
+    builtin_mp: HashMap<String, BuiltIn>
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter {}
+        let builtin_mp = HashMap::from([
+            ("EQUAL".to_string(), BuiltIn::Equal(Box::new(Equal::new()))),
+        ]);
+        Interpreter { builtin_mp }
     }
     pub fn visit_binary(& self, binary: & Binary) -> Result<Val, RuntimeError> {
         let left = self.interpret(&binary.left)?;
@@ -285,8 +341,12 @@ impl Interpreter {
                 Ok(Val::Unit)
             }
             TokenType::Identifer => {
-                let msg = format!("Reference to unbound variable {}.", tok.lexeme);
-                Err(RuntimeError{ token: tok.clone(), msg })
+                if let Some(built_in) = self.builtin_mp.get(&tok.lexeme) {
+                    Ok(Val::BuiltIn(built_in.clone()))
+                } else {
+                    let msg = format!("Reference to unbound variable {}.", tok.lexeme);
+                    Err(RuntimeError{ token: tok.clone(), msg })
+                }
 
             }
             _ => panic!("INTERPRETER FAILED in visit_primary: Found token not of type String, Number, Unit, or Identifier.")
@@ -351,6 +411,10 @@ impl Interpreter {
                 }
 
                 Ok(return_val)
+            }
+            Val::BuiltIn(b) => {
+                // TODO: error handling
+                Ok(b.call(&arg).unwrap())
             }
             _ => {
                 // TODO

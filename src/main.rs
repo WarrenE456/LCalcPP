@@ -4,6 +4,7 @@ pub mod lcalc;
 pub mod parser;
 pub mod expr;
 pub mod runtime;
+pub mod builtin;
 
 use lcalc::Lcalc;
 
