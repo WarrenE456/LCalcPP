@@ -51,9 +51,7 @@ impl Lcalc {
             }
         };
 
-        let interpreter = Interpreter::new();
-
-        match interpreter.interpret(&expr) {
+        match Interpreter::interpret(&expr) {
             Ok(val) => 
                 Ok(val),
             Err(e) => {

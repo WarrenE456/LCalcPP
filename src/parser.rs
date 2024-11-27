@@ -99,8 +99,12 @@ impl<'a> Parser<'a> {
         if self.is_match(TokenType::LParen) {
             let _ = self.advance();
             let expr = self.expr()?;
-            let _ = self.advance();
-            Ok(expr)
+            if let Err(tok) = self.expect(TokenType::RParen) {
+                let msg = format!("Expected ')' to match '(', found '{}'.", tok.lexeme);
+                Err( ParserError { line: tok.line, col: tok.line, msg } )
+            } else {
+                Ok(expr)
+            }
         }
         else {
             Ok(self.primary()?)

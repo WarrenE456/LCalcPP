@@ -1,5 +1,7 @@
 use crate::scanner::{Token, TokenType};
-use crate::runtime::Val;
+use crate::runtime::{Val, ExprVal};
+
+use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
 pub struct Binary {
@@ -41,6 +43,17 @@ pub enum Expr {
 }
 
 impl Expr {
+    pub fn wrap(&self) -> Val {
+        match self {
+            Expr::Beta(val) => {
+                match &**val {
+                    Val::ExprVal(_) => *val.clone(),
+                    val => val.clone(),
+                }
+            }
+            expr => Val::ExprVal(RefCell::new(ExprVal::Expr(Box::new(expr.clone())))),
+        }
+    }
     pub fn beta_reduction(&self, name: &String, val: &Val) -> Expr {
         match self {
             Expr::Primary(tok) => {
