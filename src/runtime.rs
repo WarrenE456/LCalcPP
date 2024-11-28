@@ -404,8 +404,9 @@ impl Interpreter {
             }
             TokenType::Identifer => {
                 let builtin_mp = HashMap::from([
-                    ("EQUAL".to_string(), BuiltIn::Equal(Box::new(Equal::new()))),
-                    ("PRINT".to_string(), BuiltIn::Print),
+                    (String::from("EQUAL"), BuiltIn::Equal(Box::new(Equal::new()))),
+                    (String::from("GREATER"), BuiltIn::Greater(Box::new(Greater::new()))),
+                    (String::from("PRINT"), BuiltIn::Print),
                 ]);
                 if let Some(built_in) = builtin_mp.get(&tok.lexeme) {
                     Ok(Val::BuiltIn(built_in.clone()))
