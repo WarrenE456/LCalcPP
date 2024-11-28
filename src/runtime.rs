@@ -2,7 +2,7 @@ use crate::expr::*;
 use crate::builtin::*;
 use crate::scanner::{Token, TokenType};
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -13,26 +13,50 @@ pub struct Abstraction {
 }
 
 #[derive(Clone, Debug)]
-pub enum ExprVal {
-    Expr(Box<Expr>),
+pub enum Arg {
+    Expr(Box<Expr>, Option<(Type, Token)>),
     Val(Box<Val>),
 }
 
-impl ExprVal {
+impl Arg {
     pub fn new(e: Expr) -> Self {
-        Self::Expr(Box::new(e))
+        Self::Expr(Box::new(e), None)
     }
     pub fn get(&mut self) -> Result<Val, RuntimeError> {
         match self {
-            Self::Expr(expr) => {
-
-                // TODO: Error handling
+            Self::Expr(expr, tup) => {
                 let val = Interpreter::interpret(&*expr)?;
+                if let Some((t, param_tok)) = tup {
+                    let arg_type = val.to_type();
+                    if !Type::deep_equality(t, &arg_type) {
+                        let msg = format!("Attempt to bind argument of type {} to parameter of type {}.",
+                            arg_type.to_string(), t.to_string());
+                        return Err( RuntimeError { token: param_tok.clone(), msg })
+                    }
+                }
                 *self = Self::Val(Box::new(val.clone()));
                 Ok(val)
             }
             Self::Val(val) => {
                 Ok(*val.clone())
+            }
+        }
+    }
+    pub fn restrict_type(&mut self, target: Type, param_tok: Token) -> Result<(), RuntimeError> {
+        match self {
+            Arg::Expr(_, tup) => {
+                *tup = Some((target, param_tok)); 
+                Ok(())
+            }
+            Arg::Val(v) => {
+                let arg_type = v.to_type();
+                if !Type::deep_equality(&target, &arg_type) {
+                    let msg = format!("Attempt to bind argument of type {} to parameter of type {}.",
+                        arg_type.to_string(), target.to_string());
+                    Err( RuntimeError { token: param_tok.clone(), msg })
+                } else {
+                    Ok(())
+                }
             }
         }
     }
@@ -44,7 +68,7 @@ pub enum Val {
     String(String),
     Abstraction(Abstraction, Option<Box<Type>>), 
     BuiltIn(BuiltIn),
-    ExprVal(RefCell<ExprVal>),
+    Arg(RefCell<Arg>),
     Unit,
 }
 
@@ -147,7 +171,7 @@ impl Type {
 impl Val {
     pub fn unwrap(&self) -> Result<Val, RuntimeError> {
         match self {
-            Val::ExprVal(ev) => ev.borrow_mut().get(),
+            Val::Arg(ev) => ev.borrow_mut().get(),
             val => Ok(val.clone())
         }
     }
@@ -158,9 +182,9 @@ impl Val {
             Val::Unit                           => "()".to_string(),
             Val::Abstraction(_, _)              => "<abstraction>".to_string(),
             Val::BuiltIn(_)                     => "<built-in>".to_string(),
-            Val::ExprVal(ev) => match &*ev.borrow() {
-                ExprVal::Val(v)  => (*v).to_string(),
-                ExprVal::Expr(_)            => panic!("INTERPRETER FAILED: Attempt to convert ExprVal::Expr to string."),
+            Val::Arg(ev) => match &*ev.borrow() {
+                Arg::Val(v)  => (*v).to_string(),
+                Arg::Expr(_, _)            => panic!("INTERPRETER FAILED: Attempt to convert ExprVal::Expr to string."),
             },
         }
     }
@@ -173,9 +197,9 @@ impl Val {
                 Type::Abstraction(abs.paramtype.clone().map(|v| Box::new(v)), val.clone())
             }
             Val::BuiltIn(b) => b.to_type(),
-            Val::ExprVal(ev) => match &*ev.borrow() {
-                ExprVal::Val(v)  => (*v).to_type(),
-                ExprVal::Expr(_)            => panic!("INTERPRETER FAILED: Attempt to convert ExprVal::Expr to type."),
+            Val::Arg(ev) => match &*ev.borrow() {
+                Arg::Val(v)  => (*v).to_type(),
+                Arg::Expr(_, _)            => panic!("INTERPRETER FAILED: Attempt to convert ExprVal::Expr to type."),
             },
         }
     }
@@ -213,7 +237,7 @@ impl Val {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RuntimeError {
     pub token: Token,
     pub msg: String,
@@ -444,6 +468,12 @@ impl Interpreter {
                 //     }
                 //
                 // }
+                // Type check the argument and parameter
+                let parameter_type = abstraction.paramtype;
+                if let (Some(parameter_type), Val::Arg(arg)) = (&parameter_type, &arg) {
+                    arg.borrow_mut().restrict_type(parameter_type.clone(), abstraction.param.clone());  
+                }
+
                 // Run the function
                 let return_val = Self::interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?;
 

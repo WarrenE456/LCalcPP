@@ -1,5 +1,5 @@
 use crate::scanner::{Token, TokenType};
-use crate::runtime::{Val, ExprVal};
+use crate::runtime::{Val, Arg};
 
 use std::cell::RefCell;
 
@@ -47,11 +47,11 @@ impl Expr {
         match self {
             Expr::Beta(val) => {
                 match &**val {
-                    Val::ExprVal(_) => *val.clone(),
+                    Val::Arg(_) => *val.clone(),
                     val => val.clone(),
                 }
             }
-            expr => Val::ExprVal(RefCell::new(ExprVal::Expr(Box::new(expr.clone())))),
+            expr => Val::Arg(RefCell::new(Arg::Expr(Box::new(expr.clone()), None))),
         }
     }
     pub fn beta_reduction(&self, name: &String, val: &Val) -> Expr {
