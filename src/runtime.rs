@@ -276,9 +276,10 @@ impl Interpreter {
                         a.push_str(&b.to_string());
                         Ok(Val::String(a))
                     }
-                    (Val::Number(a), Val::String(mut b)) => {
-                        b.push_str(&a.to_string());
-                        Ok(Val::String(b))
+                    (Val::Number(a), Val::String(b)) => {
+                        let mut a = a.to_string();
+                        a.push_str(&b);
+                        Ok(Val::String(a))
                     }
                     (Val::String(mut b), Val::String(a)) => {
                         b.push_str(&a);

@@ -126,7 +126,10 @@ impl<'a> Scanner<'a> {
                 b'#' => {
                     loop {
                         if let Some(a) = self.advance() {
-                            if a == b'\n' { break; }
+                            if a == b'\n' { 
+                                self.line.set(self.line.get() + 1); self.col.set(0);
+                                break;
+                            }
                         }
                         else {
                             break;
