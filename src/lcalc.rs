@@ -17,7 +17,7 @@ impl Lcalc {
     pub fn gen_error(&self, line: usize, col: usize, msg: String, program: &str) {
         let error_bubble = if col > 0 && line > 0 {
             format!("{}\n{}^",
-                program.trim_end(), " ".repeat(col - 1)
+                program.split('\n').collect::<Vec<&str>>()[line - 1].trim_end(), " ".repeat(col - 1)
             )
         } else {
             "".to_string()
