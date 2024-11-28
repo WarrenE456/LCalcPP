@@ -405,6 +405,7 @@ impl Interpreter {
             TokenType::Identifer => {
                 let builtin_mp = HashMap::from([
                     ("EQUAL".to_string(), BuiltIn::Equal(Box::new(Equal::new()))),
+                    ("PRINT".to_string(), BuiltIn::Print),
                 ]);
                 if let Some(built_in) = builtin_mp.get(&tok.lexeme) {
                     Ok(Val::BuiltIn(built_in.clone()))
@@ -449,29 +450,11 @@ impl Interpreter {
 
         match callee {
             Val::Abstraction(abstraction, target_return_t) => {
-                //
-                // TODO: Unncomment this. It is commented right now becuase it breaks ExprVal's.
-                // To fix this implement type restrictions on ExprVals when the time comes that
-                // they need to be evaluated. OR, figure out a way to work out an expressions
-                // type which would be hard, but would make the langauge more robust because we
-                // could then typecheck the return value of an abstraction semanically instead of
-                // at runtime.
-                //
-                // Type check the argument and parameter
-                // let argument_type = arg.to_type();
-                // let parameter_type = abstraction.paramtype;
-                // if let Some(parameter_type) = &parameter_type {
-                //     if !Type::deep_equality(&argument_type, &parameter_type) {
-                //         let msg = format!("Attempt to bind argument of type {} to parameter of type {}.",
-                //             argument_type.to_string(), parameter_type.to_string());
-                //         return Err( RuntimeError { token: abstraction.param, msg })
-                //     }
-                //
-                // }
+
                 // Type check the argument and parameter
                 let parameter_type = abstraction.paramtype;
                 if let (Some(parameter_type), Val::Arg(arg)) = (&parameter_type, &arg) {
-                    arg.borrow_mut().restrict_type(parameter_type.clone(), abstraction.param.clone());  
+                    arg.borrow_mut().restrict_type(parameter_type.clone(), abstraction.param.clone())?;  
                 }
 
                 // Run the function

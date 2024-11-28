@@ -47,20 +47,35 @@ impl Equal {
     }
 }
 
+struct Print {
+}
+
+impl Print {
+    pub fn call(arg: &Val) {
+        println!("{}", arg.to_string());
+    }
+    pub fn to_type() -> Type {
+        Type::Abstraction(None, None)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum BuiltIn {
     Equal(Box<Equal>),
+    Print,
 }
 
 impl BuiltIn {
     pub fn to_type(&self) -> Type {
         match self {
             Self::Equal(eq) => eq.to_type(),
+            Self::Print => Print::to_type(),
         }
     }
     pub fn call(&self, arg: &Val) -> Result<Val, RuntimeError> {
         match self {
             Self::Equal(eq) => eq.call(arg),
+            Self::Print => { Print::call(&arg.unwrap()?); Ok(Val::Unit) },
         }
     }
 }
