@@ -68,7 +68,6 @@ impl Lcalc {
             let _ = stdout().flush();
             stdin().read_line(&mut line).expect("Failed to read line.");
             if let Ok(val) = self.run(&line) {
-                // TODO: new-line shit
                 println!("({}) {}\n", val.to_type().to_string(), val.to_string());
             }
             line.clear();

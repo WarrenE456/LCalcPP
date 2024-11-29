@@ -1,3 +1,4 @@
+// TODO nested type definitions (e.g. (Number -> Number) -> (Number -> Number))
 use crate::scanner::{Token, TokenType};
 use crate::expr::*;
 
@@ -113,9 +114,10 @@ impl<'a> Parser<'a> {
 
     // apply -> group group* ;
     fn apply(&self) -> Result<Expr, ParserError> {
+        let callee_tok = &self.peek();
         let mut expr = self.group()?;
         while self.any_match(&[TokenType::LParen, TokenType::Number, TokenType::String, TokenType::Identifer, TokenType::Unit]) {
-            expr = Expr::Call(Box::new(Call { callee: expr, arg: self.group()? }));
+            expr = Expr::Call(Box::new(Call { callee: expr, callee_tok: callee_tok.clone(), arg: self.group()? }));
         }
         Ok(expr)
     }

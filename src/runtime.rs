@@ -466,24 +466,21 @@ impl Interpreter {
                 if let Some(target_return_t) = target_return_t {
                     let return_t = return_val.to_type();
                     if !Type::deep_equality(&return_t, &(*target_return_t)) {
-                        let _msg = format!("Function returned type {}, expected type {}.",
+                        let msg = format!("Function returned type {}, expected type {}.",
                             return_t.to_string(), target_return_t.to_string()
                         );
-                        panic!("Function returned {}, expected {}.", return_t.to_string(), target_return_t.to_string());
-                        // TODO
-                        // return Err( RuntimeError { token: , msg })
+                        return Err(RuntimeError { msg, token: call.callee_tok.clone() });
                     }
                 }
 
                 return_val.unwrap()
             }
             Val::BuiltIn(b) => {
-                // TODO: error handling
-                Ok(b.call(&arg).unwrap())
+                Ok(b.call(&arg)?)
             }
             _ => {
-                // TODO
-                panic!("Attempt to call non-abstraction {}.", callee.to_type().to_string());
+                let msg = format!("Attempt to call non-abstraction {}.", callee.to_type().to_string());
+                return Err(RuntimeError { msg, token: call.callee_tok.clone() });
             }
         }
     }

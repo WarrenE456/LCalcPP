@@ -1,0 +1,33 @@
+# List =
+#   | Cons of (Float * List)
+#   | Nil
+
+# caselist (cons (tup v n)) c n => c (tup v n)
+# caselist nil c n      => n
+
+let caselist = (L l. L c. L n. l c n) in
+let cons     = (L x. L c. L n. c x) in
+let nil      = (L c. L n. n) in
+
+let tup = (L a. L b. L f. f a b) in
+let tup0 = (L a. L b. a) in 
+let tup1 = (L a. L b. b) in
+
+let list = cons (tup 1 (cons (tup "hi" (cons (tup 10 nil))))) in
+
+let F = L f. L l. caselist l
+    (L node. (node tup0) + ", " + (f(node tup1)))
+    "Nil" 
+in
+let list_str = (L g. F (g g))(L g. F (g g)) in
+let _ = PRINT (list_str list) in
+
+let Y = L f. (L x. f(x x))(L x. f(x x)) in
+let F = L f. L g. L l. caselist l
+    (L node. cons (tup (g(node tup0)) (f g (node tup1))))
+    (nil)
+in
+let list_map = Y F in
+
+let list = cons(tup 1 (cons (tup 2(cons (tup 3(cons (tup 4(cons (tup 5 nil))))))))) in
+PRINT (list_str (list_map (L x. x * x) list))

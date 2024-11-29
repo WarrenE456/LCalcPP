@@ -29,6 +29,7 @@ pub struct AbstractionDef {
 #[derive(Debug, Clone)]
 pub struct Call {
     pub callee: Expr,
+    pub callee_tok: Token,
     pub arg: Expr,
 }
 
@@ -102,6 +103,7 @@ impl Expr {
             Expr::Call(call) => {
                 Expr::Call(Box::new(Call {
                     callee: call.callee.beta_reduction(name, val),
+                    callee_tok: call.callee_tok.clone(),
                     arg: call.arg.beta_reduction(name, val),
                 }))
             }
