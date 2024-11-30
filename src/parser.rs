@@ -7,17 +7,18 @@ use std::cell::Cell;
 /*
 * Context-free Grammar
 *
-* program -> expr EOF ;
-* expr -> binding;
-* binding -> "let" IDENTIFIER ( ":" type )? "=" lambda ( "in" binding )? | lambda;
-* lambda -> "L" IDENTIFIER ":" type "." expr | term ";"
-* term -> factor ( ("+" | "-") factor )* ;
-* factor -> apply ( ("*" | "/") apply )* ;
-* apply -> group group* ;
-* group -> "(" expr ")" | primary ;
-* primary -> STRING | NUMBER | IDENTIFIER ;
+* program   -> expr EOF ;
+* expr      -> binding;
+* binding   -> "let" IDENTIFIER ( ":" types )? "=" lambda ( "in" binding )? | lambda;
+* lambda    -> "L" IDENTIFIER ":" types "." expr | term ";"
+* term      -> factor ( ("+" | "-") factor )* ;
+* factor    -> apply ( ("*" | "/") apply )* ;
+* apply     -> group group* ;
+* group     -> "(" expr ")" | primary ;
+* primary   -> STRING | NUMBER | IDENTIFIER ;
 *
-* type -> IDENTIFIER ;
+* types     -> type ( "->" type )* ;
+* type      -> ( "(" types ")" | IDENTIFIER ) ;
 */
 
 pub struct ParserError {
@@ -29,6 +30,26 @@ pub struct ParserError {
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
     cur: Cell<usize>,
+}
+
+
+#[derive(Debug, Clone)]
+pub enum ParserType {
+    Abs(Box<ParserType>, Box<ParserType>),
+    Base(Token),
+}
+
+impl ParserType {
+    pub fn tok(&self) -> Token {
+        match self {
+            Self::Base(tok) => {
+                tok.clone()
+            }
+            Self::Abs(first, _) => {
+                (*first).tok()
+            }
+        }
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -143,27 +164,38 @@ impl<'a> Parser<'a> {
         }
         Ok(expr)
     }
-    
-    // type -> IDENTIFIER ( "->" IDENTIFIER );
-    fn _type(&self) -> Result<Vec<Token>, ParserError> {
-        let mut types = Vec::<Token>::new();
 
-        loop {
-            let typename =  self.expect(TokenType::Identifer).map_err(|e| {
-                let msg = format!("Expected a type, found '{}'.", e.lexeme);
-                ParserError { line: e.line, col: e.col, msg }
-            })?;
-
-            types.push(typename);
-
-            if self.is_match(TokenType::Arrow) {
-                let _ = self.advance();
+    // type -> ( "(" types ")" | IDENTIFIER ) ;
+    fn _type(&self) -> Result<ParserType, ParserError> {
+        if self.is_match(TokenType::LParen) {
+            let _ = self.advance();
+            let _type = self._types()?;
+            if let Err(tok) = self.expect(TokenType::RParen) {
+                let msg = format!("Expected ')' to match '(', found '{}'.", tok.lexeme);
+                Err(ParserError { msg, line: tok.line, col: tok.col })
             } else {
-                break;
+                Ok(_type)
             }
+        } else {
+            Ok(ParserType::Base(self.expect(TokenType::Identifer).map_err(|e| ParserError {
+                msg: format!("Expected type identifier found {}.", e.lexeme),
+                line: e.line,
+                col: e.col
+            })?))
         }
-
-        Ok(types)
+    }
+    
+    // types -> type ( "->" types )? ;
+    fn _types(&self) -> Result<ParserType, ParserError> {
+        let mut _type = self._type()?;
+        if self.is_match(TokenType::Arrow) {
+            let _ = self.advance();
+            _type = ParserType::Abs(
+                Box::new(_type),
+                Box::new(self._types()?)
+            );
+        }
+        Ok(_type)
     }
 
     // Fix 'end of file' error message when attemping to use untyped lambda e.g. L x. x
@@ -180,7 +212,7 @@ impl<'a> Parser<'a> {
             let paramtype = 
             if self.is_match(TokenType::Colon) { 
                 let _ = self.advance();
-                Some(self._type()?)
+                Some(self._types()?)
             } else {
                 None
             };
@@ -212,7 +244,7 @@ impl<'a> Parser<'a> {
 
             let typename = if self.is_match(TokenType::Colon) {
                 let _ = self.advance();
-                Some(self._type())
+                Some(self._types())
             } else {
                 None
             }.transpose()?;
@@ -231,7 +263,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Expr::Binding(Box::new(Binding { name, typename, op, val, in_expr })))
+            Ok(Expr::Binding(Box::new(Binding { name, ptype: typename, op, val, in_expr })))
         }   
         else {
             self.lambda()

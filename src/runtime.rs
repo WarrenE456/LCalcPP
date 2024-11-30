@@ -1,6 +1,7 @@
 use crate::expr::*;
 use crate::builtin::*;
 use crate::scanner::{Token, TokenType};
+use crate::parser::ParserType;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -123,16 +124,24 @@ impl Type {
         }
 
     }
-    pub fn from_tokens(tokens: &Vec<Token>) -> Result<Option<Type>, RuntimeError> {
-        let mut types = Vec::new();
-        for tok in tokens.iter() {
-            let new_argt = Type::from_typename(&tok.lexeme).ok_or_else(|| {
+    pub fn from_token(tok: &Token) -> Result<Option<Type>, RuntimeError> {
+            Type::from_typename(&tok.lexeme).ok_or_else(|| {
                 let msg = format!("Reference to unbound type '{}'.", tok.lexeme);
                 RuntimeError { token: tok.clone(), msg }
-            })?;
-            types.push(new_argt);
+            })
+    }
+    pub fn parsertype_to_runtimetype(ptype: &ParserType) -> Result<Option<Type>, RuntimeError> {
+        match ptype {
+            ParserType::Base(tok) => {
+                Self::from_token(tok)
+            }
+            ParserType::Abs(first, second) => {
+                Ok(Some(Type::Abstraction(
+                    Self::parsertype_to_runtimetype(&first)?.map(|x| Box::new(x)),
+                    Self::parsertype_to_runtimetype(&second)?.map(|x| Box::new(x)),
+                )))
+            }
         }
-        Ok(Type::from_slice(&types.as_slice()))
     }
     pub fn to_string(&self) -> String {
         match self {
@@ -357,14 +366,14 @@ impl Interpreter {
         let mut val = Self::interpret(&binding.val)?;
 
         let val_type = val.to_type();
-        let target_type =  if let Some(typename) = &binding.typename {
-            let target_type = Type::from_tokens(typename)?;
+        let target_type =  if let Some(ptype) = &binding.ptype {
+            let target_type = Type::parsertype_to_runtimetype(ptype)?;
             if let Some(target_type) = &target_type {
                 // Type checking
                 if !Type::deep_equality(&val_type, &target_type) {
                     let msg = format!("Cannot bind value of type {} to variable of type {}.",
                         val_type.to_string(), target_type.to_string());
-                    return Err(RuntimeError { token: typename[0].clone(), msg });
+                    return Err(RuntimeError { token: ptype.tok(), msg });
                 }
             }
             Some(target_type)
@@ -425,7 +434,7 @@ impl Interpreter {
             Expr::Abstraction(def) => {
                 let argtype = def.paramtype
                     .clone()
-                    .map(|v| Type::from_tokens(&v))
+                    .map(|v| Type::parsertype_to_runtimetype(&v))
                     .transpose()?
                     .flatten()
                     .map(|v| Box::new(v));
@@ -438,7 +447,7 @@ impl Interpreter {
         let arg = def.param.clone();
         let argtype = def.paramtype
             .clone()
-            .map(|v| Type::from_tokens(&v))
+            .map(|v| Type::parsertype_to_runtimetype(&v))
             .transpose()?
             .flatten();
         let body = def.body.clone();
@@ -460,7 +469,9 @@ impl Interpreter {
                 }
 
                 // Run the function
-                let return_val = Self::interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?;
+                let return_val =
+                    Self::interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?
+                    .unwrap()?;
 
                 // Type check the return value
                 if let Some(target_return_t) = target_return_t {
@@ -473,7 +484,7 @@ impl Interpreter {
                     }
                 }
 
-                return_val.unwrap()
+                Ok(return_val)
             }
             Val::BuiltIn(b) => {
                 Ok(b.call(&arg)?)

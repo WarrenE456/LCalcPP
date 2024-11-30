@@ -1,3 +1,4 @@
+use crate::parser::ParserType;
 use crate::scanner::{Token, TokenType};
 use crate::runtime::{Val, Arg};
 
@@ -13,7 +14,7 @@ pub struct Binary {
 #[derive(Debug, Clone)]
 pub struct Binding {
     pub name: String,
-    pub typename: Option<Vec<Token>>,
+    pub ptype: Option<ParserType>,
     pub op: Token,
     pub val: Expr,
     pub in_expr: Option<Expr>,
@@ -22,7 +23,7 @@ pub struct Binding {
 #[derive(Debug, Clone)]
 pub struct AbstractionDef {
     pub param: Token,
-    pub paramtype: Option<Vec<Token>>,
+    pub paramtype: Option<ParserType>,
     pub body: Expr,
 }
 
@@ -80,7 +81,7 @@ impl Expr {
                 if *name != bind.name {
                     Expr::Binding(Box::new(Binding{
                         name: bind.name.clone(),
-                        typename: bind.typename.clone(),
+                        ptype: bind.ptype.clone(),
                         op: bind.op.clone(),
                         val: bind.val.beta_reduction(name, val),
                         in_expr: bind.in_expr.clone().map(|v| v.beta_reduction(name, val)),
