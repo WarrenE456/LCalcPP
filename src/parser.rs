@@ -1,4 +1,3 @@
-// TODO nested type definitions (e.g. (Number -> Number) -> (Number -> Number))
 use crate::scanner::{Token, TokenType};
 use crate::expr::*;
 
@@ -9,7 +8,7 @@ use std::cell::Cell;
 *
 * program   -> expr EOF ;
 * expr      -> binding;
-* binding   -> "let" IDENTIFIER ( ":" types )? "=" lambda ( "in" binding )? | lambda;
+* binding   -> var_binding | type_binding | lambda;
 * lambda    -> "L" IDENTIFIER ":" types "." expr | term ";"
 * term      -> factor ( ("+" | "-") factor )* ;
 * factor    -> apply ( ("*" | "/") apply )* ;
@@ -19,6 +18,9 @@ use std::cell::Cell;
 *
 * types     -> type ( "->" type )* ;
 * type      -> ( "(" types ")" | IDENTIFIER ) ;
+*
+* var_binding   -> "let" IDENTIFIER ( ":" types )? "=" lambda ( "in" binding )?
+* type_binding  -> "type" IDENTIFIER "=" types ( "in" binding )?
 */
 
 pub struct ParserError {
@@ -231,40 +233,74 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // var_binding -> "let" IDENTIFIER ( ":" types )? "=" lambda ( "in" binding )?
+    fn var_binding(&self) -> Result<Expr, ParserError> {
+        let _ = self.advance(); 
 
-    // binding -> "let" IDENTIFIER ( ":" type )? "=" lambda ( "in" binding )? | lambda;
+        let name =  self.expect(TokenType::Identifer).map_err(|e| {
+            let msg = format!("Expected a variable name, found '{}'.", e.lexeme);
+            ParserError { line: e.line, col: e.col, msg }
+        })?.lexeme;
+
+        let typename = if self.is_match(TokenType::Colon) {
+            let _ = self.advance();
+            Some(self._types())
+        } else {
+            None
+        }.transpose()?;
+
+        let op = self.expect(TokenType::Equal).map_err(|e| {
+            let msg = format!("Expected '=', found '{}'.", e.lexeme);
+            ParserError { line: e.line, col: e.col, msg }
+        })?;
+
+        let val = self.lambda()?;
+
+        let in_expr = if self.is_match(TokenType::In) {
+            let _ = self.advance();
+            Some(self.binding()?)
+        } else {
+            None
+        };
+
+        Ok(Expr::Binding(Box::new(Binding { name, ptype: typename, op, val, in_expr })))
+
+    }
+
+    // type_binding  -> "type" IDENTIFIER "=" types ( "in" binding )?
+    fn type_binding(&self) -> Result<Expr, ParserError> {
+        let _ = self.advance();
+
+        let name =  self.expect(TokenType::Identifer).map_err(|e| {
+            let msg = format!("Expected a typename, found '{}'.", e.lexeme);
+            ParserError { line: e.line, col: e.col, msg }
+        })?.lexeme;
+
+        let op = self.expect(TokenType::Equal).map_err(|e| {
+            let msg = format!("Expected '=', found '{}'.", e.lexeme);
+            ParserError { line: e.line, col: e.col, msg }
+        })?;
+
+        let val = self._types()?;
+
+        let in_expr = if self.is_match(TokenType::In) {
+            let _ = self.advance();
+            Some(self.binding()?)
+        } else {
+            None
+        };
+
+        Ok(Expr::TypeBinding(Box::new(TypeBinding { name, op, val, in_expr })))
+    }
+
+    // binding   -> var_binding | type_binding | lambda;
     fn binding(&self) -> Result<Expr, ParserError> {
         if self.is_match(TokenType::Let) {
-            let _ = self.advance(); 
-
-            let name =  self.expect(TokenType::Identifer).map_err(|e| {
-                let msg = format!("Expected a variable name, found '{}'.", e.lexeme);
-                ParserError { line: e.line, col: e.col, msg }
-            })?.lexeme;
-
-            let typename = if self.is_match(TokenType::Colon) {
-                let _ = self.advance();
-                Some(self._types())
-            } else {
-                None
-            }.transpose()?;
-
-            let op = self.expect(TokenType::Equal).map_err(|e| {
-                let msg = format!("Expected '=', found '{}'.", e.lexeme);
-                ParserError { line: e.line, col: e.col, msg }
-            })?;
-
-            let val = self.lambda()?;
-
-            let in_expr = if self.is_match(TokenType::In) {
-                let _ = self.advance();
-                Some(self.binding()?)
-            } else {
-                None
-            };
-
-            Ok(Expr::Binding(Box::new(Binding { name, ptype: typename, op, val, in_expr })))
+            self.var_binding()
         }   
+        else if self.is_match(TokenType::Type) {
+            self.type_binding()
+        }
         else {
             self.lambda()
         }

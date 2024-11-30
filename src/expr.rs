@@ -21,6 +21,14 @@ pub struct Binding {
 }
 
 #[derive(Debug, Clone)]
+pub struct TypeBinding {
+    pub name: String,
+    pub op: Token,
+    pub val: ParserType,
+    pub in_expr: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
 pub struct AbstractionDef {
     pub param: Token,
     pub paramtype: Option<ParserType>,
@@ -39,6 +47,7 @@ pub enum Expr {
     Primary(Token),
     Binary(Box<Binary>),
     Binding(Box<Binding>),
+    TypeBinding(Box<TypeBinding>),
     Abstraction(Box<AbstractionDef>),
     Call(Box<Call>),
     Beta(Box<Val>),
@@ -109,6 +118,9 @@ impl Expr {
                 }))
             }
             Expr::Beta(_) => {
+                self.clone()
+            }
+            Expr::TypeBinding(_) => {
                 self.clone()
             }
         }

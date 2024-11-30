@@ -23,10 +23,10 @@ impl Arg {
     pub fn new(e: Expr) -> Self {
         Self::Expr(Box::new(e), None)
     }
-    pub fn get(&mut self) -> Result<Val, RuntimeError> {
+    pub fn get(&mut self, interpretrer: &Interpreter) -> Result<Val, RuntimeError> {
         match self {
             Self::Expr(expr, tup) => {
-                let val = Interpreter::interpret(&*expr)?;
+                let val = interpretrer.interpret(&*expr)?;
                 if let Some((t, param_tok)) = tup {
                     let arg_type = val.to_type();
                     if !Type::deep_equality(t, &arg_type) {
@@ -82,13 +82,15 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn from_typename(typename: &str) -> Option<Option<Self>> {
+    pub fn from_typename(typename: &str, interpreter: &Interpreter) -> Option<Option<Self>> {
         match typename {
             "Number" => Some(Some(Type::Number)),
             "String" => Some(Some(Type::String)),
             "Unit"   => Some(Some(Type::Unit)),
             "Any"    => Some(None),
-            _ => None,
+            _ => {
+                interpreter.type_mp.borrow().get(&typename.to_string()).map(|v| v.clone())
+            },
         }
     }
     pub fn new_false() -> Val {
@@ -107,38 +109,21 @@ impl Type {
             body
         }, None)
     }
-    pub fn from_slice(types: &[Option<Type>]) -> Option<Type> {
-        if types.len() == 0 {
-            Some(Type::Unit)
-        }
-        else if types.len() == 1 {
-            types[0].clone()
-        }
-        else {
-            Some(
-                Type::Abstraction(
-                    types.first().unwrap().clone().map(|v| Box::new(v)),
-                    Box::new(Self::from_slice(&types[1..])).map(|v| Box::new(v))
-                )
-            )
-        }
-
-    }
-    pub fn from_token(tok: &Token) -> Result<Option<Type>, RuntimeError> {
-            Type::from_typename(&tok.lexeme).ok_or_else(|| {
+    pub fn from_token(tok: &Token, interpreter: &Interpreter) -> Result<Option<Type>, RuntimeError> {
+            Type::from_typename(&tok.lexeme, interpreter).ok_or_else(|| {
                 let msg = format!("Reference to unbound type '{}'.", tok.lexeme);
                 RuntimeError { token: tok.clone(), msg }
             })
     }
-    pub fn parsertype_to_runtimetype(ptype: &ParserType) -> Result<Option<Type>, RuntimeError> {
+    pub fn parsertype_to_runtimetype(ptype: &ParserType, interpreter: &Interpreter) -> Result<Option<Type>, RuntimeError> {
         match ptype {
             ParserType::Base(tok) => {
-                Self::from_token(tok)
+                Self::from_token(tok, interpreter)
             }
             ParserType::Abs(first, second) => {
                 Ok(Some(Type::Abstraction(
-                    Self::parsertype_to_runtimetype(&first)?.map(|x| Box::new(x)),
-                    Self::parsertype_to_runtimetype(&second)?.map(|x| Box::new(x)),
+                    Self::parsertype_to_runtimetype(&first, interpreter)?.map(|x| Box::new(x)),
+                    Self::parsertype_to_runtimetype(&second, interpreter)?.map(|x| Box::new(x)),
                 )))
             }
         }
@@ -178,9 +163,9 @@ impl Type {
 }
 
 impl Val {
-    pub fn unwrap(&self) -> Result<Val, RuntimeError> {
+    pub fn unwrap(&self, interpreter: &Interpreter) -> Result<Val, RuntimeError> {
         match self {
-            Val::Arg(ev) => ev.borrow_mut().get(),
+            Val::Arg(ev) => ev.borrow_mut().get(interpreter),
             val => Ok(val.clone())
         }
     }
@@ -263,15 +248,16 @@ fn str_mul(s: &mut String, n: f64) -> Result<(), String> {
 }
 
 pub struct Interpreter {
+    type_mp: RefCell<HashMap<String, Option<Type>>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter { }
+        Interpreter { type_mp: RefCell::new(HashMap::new()) }
     }
-    pub fn visit_binary(binary: &Binary) -> Result<Val, RuntimeError> {
-        let left = Self::interpret(&binary.left)?.unwrap()?;
-        let right = Self::interpret(&binary.right)?.unwrap()?;
+    pub fn visit_binary(&self, binary: &Binary) -> Result<Val, RuntimeError> {
+        let left = self.interpret(&binary.left)?.unwrap(self)?;
+        let right = self.interpret(&binary.right)?.unwrap(self)?;
 
         use crate::scanner::TokenType::*;
 
@@ -362,12 +348,12 @@ impl Interpreter {
             _ => panic!("INTERPRETER FAILED in visist_binary: Operator '{}' type did not match any.", binary.op.lexeme),
         }
     }
-    pub fn visit_binding(binding: &Binding) -> Result<Val, RuntimeError> {
-        let mut val = Self::interpret(&binding.val)?;
+    pub fn visit_binding(&self, binding: &Binding) -> Result<Val, RuntimeError> {
+        let mut val = self.interpret(&binding.val)?;
 
         let val_type = val.to_type();
         let target_type =  if let Some(ptype) = &binding.ptype {
-            let target_type = Type::parsertype_to_runtimetype(ptype)?;
+            let target_type = Type::parsertype_to_runtimetype(ptype, self)?;
             if let Some(target_type) = &target_type {
                 // Type checking
                 if !Type::deep_equality(&val_type, &target_type) {
@@ -393,15 +379,28 @@ impl Interpreter {
             _ => {}
         }
 
-        Ok(
-            if let Some(in_expr) = &binding.in_expr {
-                Self::interpret(&in_expr.beta_reduction(&binding.name, &val))?
-            } else {
-                Val::Unit
-            }
-        )
+        if let Some(in_expr) = &binding.in_expr {
+            self.interpret(&in_expr.beta_reduction(&binding.name, &val))
+        } else {
+            Ok(Val::Unit)
+        }
     }
-    pub fn visit_primary(tok: &Token) -> Result<Val, RuntimeError> {
+    fn visit_type_binding(&self, tbinding: &TypeBinding) -> Result<Val, RuntimeError> {
+        if let Some(_) = self.type_mp.borrow().get(&tbinding.name) {
+            let msg = format!("Attempt to redefine typename '{}'.", tbinding.name);
+            return Err(RuntimeError {msg, token: tbinding.op.clone() })
+        }
+
+        let _type = Type::parsertype_to_runtimetype(&tbinding.val, self)?;
+        self.type_mp.borrow_mut().insert(tbinding.name.clone(), _type);
+
+        if let Some(in_expr) = &tbinding.in_expr {
+            self.interpret(in_expr)
+        } else {
+            Ok(Val::Unit)
+        }
+    }
+    pub fn visit_primary(&self, tok: &Token) -> Result<Val, RuntimeError> {
         match tok.t {
             TokenType::String => {
                 Ok(Val::String(tok.lexeme[1..tok.lexeme.len() - 1].to_string()))
@@ -429,12 +428,12 @@ impl Interpreter {
             _ => panic!("INTERPRETER FAILED in visit_primary: Found token not of type String, Number, Unit, or Identifier.")
         }
     }
-    fn workout_return_type(expr: &Expr) -> Result<Option<Box<Type>>, RuntimeError> {
+    fn workout_return_type(&self, expr: &Expr) -> Result<Option<Box<Type>>, RuntimeError> {
         match expr {
             Expr::Abstraction(def) => {
                 let argtype = def.paramtype
                     .clone()
-                    .map(|v| Type::parsertype_to_runtimetype(&v))
+                    .map(|v| Type::parsertype_to_runtimetype(&v, self))
                     .transpose()?
                     .flatten()
                     .map(|v| Box::new(v));
@@ -443,20 +442,20 @@ impl Interpreter {
             _ => Ok(None)
         }
     }
-    pub fn visit_abstraction(def: &AbstractionDef)-> Result<Val, RuntimeError> {
+    pub fn visit_abstraction(&self, def: &AbstractionDef)-> Result<Val, RuntimeError> {
         let arg = def.param.clone();
         let argtype = def.paramtype
             .clone()
-            .map(|v| Type::parsertype_to_runtimetype(&v))
+            .map(|v| Type::parsertype_to_runtimetype(&v, &self))
             .transpose()?
             .flatten();
         let body = def.body.clone();
-        let return_type = Self::workout_return_type(&body)?;
+        let return_type = self.workout_return_type(&body)?;
 
         Ok(Val::Abstraction(Abstraction { param: arg, paramtype: argtype, body }, return_type))
     }
-    fn visit_call(call: &Call) -> Result<Val, RuntimeError> {
-        let callee = Self::interpret(&call.callee)?.unwrap()?;
+    fn visit_call(&self, call: &Call) -> Result<Val, RuntimeError> {
+        let callee = self.interpret(&call.callee)?.unwrap(self)?;
         let arg = call.arg.wrap();
 
         match callee {
@@ -470,8 +469,8 @@ impl Interpreter {
 
                 // Run the function
                 let return_val =
-                    Self::interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?
-                    .unwrap()?;
+                    self.interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?
+                    .unwrap(self)?;
 
                 // Type check the return value
                 if let Some(target_return_t) = target_return_t {
@@ -487,7 +486,7 @@ impl Interpreter {
                 Ok(return_val)
             }
             Val::BuiltIn(b) => {
-                Ok(b.call(&arg)?)
+                Ok(b.call(&arg, self)?)
             }
             _ => {
                 let msg = format!("Attempt to call non-abstraction {}.", callee.to_type().to_string());
@@ -495,13 +494,14 @@ impl Interpreter {
             }
         }
     }
-    pub fn interpret(expr: &Expr) -> Result<Val, RuntimeError> {
+    pub fn interpret(&self, expr: &Expr) -> Result<Val, RuntimeError> {
         match expr {
-            Expr::Binary(binary) => Ok(Self::visit_binary(&(*binary))?),
-            Expr::Binding(binding) => Ok(Self::visit_binding(&(*binding))?),
-            Expr::Primary(tok) => Ok(Self::visit_primary(tok)?),
-            Expr::Abstraction(def) => Ok(Self::visit_abstraction(&(*def))?),
-            Expr::Call(call) => Ok(Self::visit_call(&(*call))?),
+            Expr::Binary(binary) => self.visit_binary(&(*binary)),
+            Expr::Binding(binding) => self.visit_binding(&(*binding)),
+            Expr::TypeBinding(binding) => self.visit_type_binding(&(*binding)),
+            Expr::Primary(tok) => self.visit_primary(tok),
+            Expr::Abstraction(def) => self.visit_abstraction(&(*def)),
+            Expr::Call(call) => self.visit_call(&(*call)),
             Expr::Beta(val) => {
                 Ok((**val).clone())
             },

@@ -26,13 +26,14 @@ impl Lcalc {
         self.report_error(err_msg);
     }
     pub fn run_file(&self, program: &str,) -> u8 {
-        if let Err(code) = self.run(program) {
+        let interpreter: Interpreter = Interpreter::new();
+        if let Err(code) = self.run(program, &interpreter) {
             code
         } else {
             0
         }
     }
-    pub fn run(&self, program: &str) -> Result<Val, u8> {
+    pub fn run(&self, program: &str, interpreter: &Interpreter) -> Result<Val, u8> {
         let scanner = Scanner::new(&program);
         let tokens = match scanner.scan_tokens() {
             Ok(tokens) => tokens,
@@ -51,7 +52,7 @@ impl Lcalc {
             }
         };
 
-        match Interpreter::interpret(&expr) {
+        match interpreter.interpret(&expr) {
             Ok(val) => 
                 Ok(val),
             Err(e) => {
@@ -63,11 +64,12 @@ impl Lcalc {
     pub fn run_prompt(&self) {
 
         let mut line = String::new();
+        let interpreter  = Interpreter::new();
         loop {
             print!(">  ");
             let _ = stdout().flush();
             stdin().read_line(&mut line).expect("Failed to read line.");
-            if let Ok(val) = self.run(&line) {
+            if let Ok(val) = self.run(&line, &interpreter) {
                 println!("({}) {}\n", val.to_type().to_string(), val.to_string());
             }
             line.clear();

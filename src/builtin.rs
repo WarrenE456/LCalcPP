@@ -1,8 +1,8 @@
-use crate::runtime::{Val, Type, RuntimeError};
+use crate::runtime::{Val, Type, RuntimeError, Interpreter};
 use crate::scanner::Token;
 
-fn equality_check(a: &Val, b: &Val) -> Result<bool, RuntimeError> {
-    match (a.unwrap()?, b.unwrap()?) {
+fn equality_check(a: &Val, b: &Val, interpreter: &Interpreter) -> Result<bool, RuntimeError> {
+    match (a.unwrap(interpreter)?, b.unwrap(interpreter)?) {
         (Val::Number(a), Val::Number(b)) => Ok(a == b),
         (Val::String(a), Val::String(b)) => Ok(*a == *b),
         (Val::Unit, Val::Unit) => Ok(true),
@@ -14,8 +14,8 @@ fn equality_check(a: &Val, b: &Val) -> Result<bool, RuntimeError> {
     }
 }
 
-fn greater_than_check(a: &Val, b: &Val) -> Result<bool, RuntimeError> {
-    match (a.unwrap()?, b.unwrap()?) {
+fn greater_than_check(a: &Val, b: &Val, interpreter: &Interpreter) -> Result<bool, RuntimeError> {
+    match (a.unwrap(interpreter)?, b.unwrap(interpreter)?) {
         (Val::Number(a), Val::Number(b)) => Ok(a > b),
         _ => {
             let msg = format!("Attempted greater than check between invalid types {} and {}.",
@@ -34,9 +34,9 @@ impl Equal {
     pub fn new() -> Self {
         Equal { a: None }
     }
-    pub fn call(&self, arg: &Val) -> Result<Val, RuntimeError> {
+    pub fn call(&self, arg: &Val, interpreter: &Interpreter) -> Result<Val, RuntimeError> {
         if let Some(a) = &self.a {
-            let is_equal = equality_check(&a, &arg)?;
+            let is_equal = equality_check(&a, &arg, interpreter)?;
             Ok(
                 if  is_equal { Val::new_true()  }
                 else         { Val::new_false() }
@@ -67,9 +67,9 @@ impl Greater {
     pub fn new() -> Self {
         Self { a: None }
     }
-    pub fn call(&self, arg: &Val) -> Result<Val, RuntimeError> {
+    pub fn call(&self, arg: &Val, interpreter: &Interpreter) -> Result<Val, RuntimeError> {
         if let Some(a) = &self.a {
-            let is_greater = greater_than_check(&a, &arg)?;
+            let is_greater = greater_than_check(&a, &arg, interpreter)?;
             Ok(
                 if  is_greater { Val::new_true()  }
                 else         { Val::new_false() }
@@ -119,11 +119,11 @@ impl BuiltIn {
             Self::Print => Print::to_type(),
         }
     }
-    pub fn call(&self, arg: &Val) -> Result<Val, RuntimeError> {
+    pub fn call(&self, arg: &Val, interpreter: &Interpreter) -> Result<Val, RuntimeError> {
         match self {
-            Self::Equal(eq) => eq.call(arg),
-            Self::Greater(gr) => gr.call(arg),
-            Self::Print => { Print::call(&arg.unwrap()?); Ok(Val::Unit) },
+            Self::Equal(eq) => eq.call(arg, interpreter),
+            Self::Greater(gr) => gr.call(arg, interpreter),
+            Self::Print => { Print::call(&arg.unwrap(interpreter)?); Ok(Val::Unit) },
         }
     }
 }
