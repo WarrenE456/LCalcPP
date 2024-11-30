@@ -277,7 +277,7 @@ impl<'a> Parser<'a> {
 
     // program -> expr EOF ;
     fn program(&self) -> Result<Expr, ParserError> {
-        let expr = self.expr();
+        let expr = self.expr()?;
 
         let next = self.advance();
         if next.t != TokenType::EOF {
@@ -287,7 +287,7 @@ impl<'a> Parser<'a> {
             return Err(ParserError{ line, col, msg });
         }
 
-        expr
+        Ok(expr)
     }
 
     pub fn parse(&self) -> Result<Expr, ParserError> {
