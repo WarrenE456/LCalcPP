@@ -93,6 +93,31 @@ impl Type {
             },
         }
     }
+    pub fn enforce_type(val: &mut Val, target_type: &Option<Type>) -> Result<(), Type> {
+        let val_type = val.to_type();
+        let target_type =  {
+            if let Some(target_type) = &target_type {
+                // Type checking
+                if !Type::deep_equality(&val_type, &target_type) {
+                    return Err(val_type);
+                }
+            }
+            Some(target_type)
+        };
+
+        // Set the abstraction type
+        match (val, target_type) {
+            (
+                Val::Abstraction(abs, return_val),
+                Some(Some(Type::Abstraction(target_param, target_return)))
+            ) => {
+                abs.paramtype = target_param.clone().map(|b| *b);
+                *return_val = target_return.clone();
+            }
+            _ => {}
+        }
+        Ok(())
+    }
     pub fn new_false() -> Val {
         let body = Expr::Abstraction(
             Box::new(
@@ -128,6 +153,7 @@ impl Type {
             }
         }
     }
+    // TODO Take Option<Type> instead of self
     pub fn to_string(&self) -> String {
         match self {
             Type::Number =>   "Number".to_string(),
@@ -351,32 +377,15 @@ impl Interpreter {
     pub fn visit_binding(&self, binding: &Binding) -> Result<Val, RuntimeError> {
         let mut val = self.interpret(&binding.val)?;
 
-        let val_type = val.to_type();
-        let target_type =  if let Some(ptype) = &binding.ptype {
+        if let Some(ptype) = &binding.ptype {
             let target_type = Type::parsertype_to_runtimetype(ptype, self)?;
-            if let Some(target_type) = &target_type {
-                // Type checking
-                if !Type::deep_equality(&val_type, &target_type) {
-                    let msg = format!("Cannot bind value of type {} to variable of type {}.",
-                        val_type.to_string(), target_type.to_string());
-                    return Err(RuntimeError { token: ptype.tok(), msg });
-                }
-            }
-            Some(target_type)
-        } else {
-            None
-        };
-
-        // Set the abstraction type
-        match (&mut val, target_type) {
-            (
-                Val::Abstraction(abs, return_val),
-                Some(Some(Type::Abstraction(target_param, target_return)))
-            ) => {
-                abs.paramtype = target_param.clone().map(|b| *b);
-                *return_val = target_return.clone();
-            }
-            _ => {}
+            Type::enforce_type(&mut val, &target_type)
+                .map_err(|val_type| RuntimeError {
+                    msg: format!("Cannot bind value of type {} to variable of type {}.",
+                        val_type.to_string(),
+                        if let Some(target_type) = target_type { target_type.to_string() } else { String::from("Any") }),
+                    token: ptype.tok(),
+                })?;
         }
 
         if let Some(in_expr) = &binding.in_expr {
@@ -468,20 +477,16 @@ impl Interpreter {
                 }
 
                 // Run the function
-                let return_val =
+                let mut return_val =
                     self.interpret(&abstraction.body.beta_reduction(&abstraction.param.lexeme, &arg))?
                     .unwrap(self)?;
 
-                // Type check the return value
-                if let Some(target_return_t) = target_return_t {
-                    let return_t = return_val.to_type();
-                    if !Type::deep_equality(&return_t, &(*target_return_t)) {
-                        let msg = format!("Function returned type {}, expected type {}.",
-                            return_t.to_string(), target_return_t.to_string()
-                        );
-                        return Err(RuntimeError { msg, token: call.callee_tok.clone() });
-                    }
-                }
+                Type::enforce_type(&mut return_val, &target_return_t.clone().map(|v| *v))
+                    .map_err(|return_t| RuntimeError {
+                        msg: format!("Function returned type {}, expected type {}.",
+                            return_t.to_string(), if let Some(t) = target_return_t { t.to_string() } else { String::from("Any") }),
+                        token: call.callee_tok.clone()
+                    })?;
 
                 Ok(return_val)
             }

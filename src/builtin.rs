@@ -30,6 +30,7 @@ pub struct Equal {
     a: Option<Val>,
 }
 
+// TODO fix type of, say, 'EQUAL 1 1'. Currently it is (Any -> Any), but it should be (Any -> (Any -> Any)).
 impl Equal {
     pub fn new() -> Self {
         Equal { a: None }

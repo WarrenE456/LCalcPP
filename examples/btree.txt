@@ -1,0 +1,16 @@
+# BTree
+#   | Node ({ left: Any * Option<BTree>), right: (Any * Option<Btree)})
+#   | Leaf (Float)
+
+# CASEBTREE (BTREE_NODE (...) (...)) fn fc => (BTREE_NODE (...) (...)) fn
+# CASEBTREE (BTREE_LEAF (val)) fn fc => val fc
+
+type Option = (Any -> Any) -> Any -> Any in
+let SOME : Any -> Option = L val. L f. L c. f val in
+let NONE : Option        = L f. L c. c in
+
+let CASEOPTION : Option -> (Any -> Any) -> Any -> Any =
+    L option. L f. L c. option f c
+in
+
+PRINT ((SOME 3) 3 5)
