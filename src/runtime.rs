@@ -153,7 +153,6 @@ impl Type {
             }
         }
     }
-    // TODO Take Option<Type> instead of self
     pub fn to_string(&self) -> String {
         match self {
             Type::Number =>   "Number".to_string(),
@@ -280,6 +279,16 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter { type_mp: RefCell::new(HashMap::new()) }
+    }
+    pub fn visit_negate(&self, negate: &Negate) -> Result<Val, RuntimeError> {
+        let val = self.interpret(&negate.val)?.unwrap(self)?;
+        match val {
+            Val::Number(num) => Ok(Val::Number(-num)),
+            _ => {
+                let msg = format!("Attempt to use negate operator on non-Number {}.", val.to_type().to_string());
+                Err(RuntimeError{ msg, token: negate.op.clone() })
+            }
+        }
     }
     pub fn visit_binary(&self, binary: &Binary) -> Result<Val, RuntimeError> {
         let left = self.interpret(&binary.left)?.unwrap(self)?;
@@ -501,6 +510,7 @@ impl Interpreter {
     }
     pub fn interpret(&self, expr: &Expr) -> Result<Val, RuntimeError> {
         match expr {
+            Expr::Negate(negate) => self.visit_negate(&(*negate)),
             Expr::Binary(binary) => self.visit_binary(&(*binary)),
             Expr::Binding(binding) => self.visit_binding(&(*binding)),
             Expr::TypeBinding(binding) => self.visit_type_binding(&(*binding)),

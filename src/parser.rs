@@ -12,7 +12,8 @@ use std::cell::Cell;
 * lambda    -> "L" IDENTIFIER ":" types "." expr | term ";"
 * term      -> factor ( ("+" | "-") factor )* ;
 * factor    -> apply ( ("*" | "/") apply )* ;
-* apply     -> group group* ;
+* apply     -> negate negate* ;
+* negate    -> ( "-" )? group ;
 * group     -> "(" expr ")" | primary ;
 * primary   -> STRING | NUMBER | IDENTIFIER ;
 *
@@ -135,12 +136,23 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // apply -> group group* ;
+    // negate -> ( "-" )? group ;
+    fn negate(&self) -> Result<Expr, ParserError> {
+        if self.is_match(TokenType::Minus) {
+            let op = self.advance();
+            let val = self.group()?;
+            Ok(Expr::Negate(Box::new(Negate { op, val })))
+        } else {
+            self.group()
+        }
+    }
+
+    // apply -> negate negate* ;
     fn apply(&self) -> Result<Expr, ParserError> {
         let callee_tok = &self.peek();
-        let mut expr = self.group()?;
+        let mut expr = self.negate()?;
         while self.any_match(&[TokenType::LParen, TokenType::Number, TokenType::String, TokenType::Identifer, TokenType::Unit]) {
-            expr = Expr::Call(Box::new(Call { callee: expr, callee_tok: callee_tok.clone(), arg: self.group()? }));
+            expr = Expr::Call(Box::new(Call { callee: expr, callee_tok: callee_tok.clone(), arg: self.negate()? }));
         }
         Ok(expr)
     }

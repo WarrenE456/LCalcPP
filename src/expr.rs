@@ -5,6 +5,12 @@ use crate::runtime::{Val, Arg};
 use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
+pub struct Negate {
+    pub op: Token,
+    pub val: Expr,
+}
+
+#[derive(Debug, Clone)]
 pub struct Binary {
     pub left: Expr,
     pub op: Token,
@@ -45,6 +51,7 @@ pub struct Call {
 #[derive(Debug, Clone)]
 pub enum Expr {
     Primary(Token),
+    Negate(Box<Negate>),
     Binary(Box<Binary>),
     Binding(Box<Binding>),
     TypeBinding(Box<TypeBinding>),
@@ -78,6 +85,12 @@ impl Expr {
                     }
                     _ => self.clone(),
                 }
+            }
+            Expr::Negate(negate) => {
+                Expr::Negate(Box::new(Negate{
+                    op: negate.op.clone(),
+                    val: negate.val.clone().beta_reduction(name, val),
+                }))
             }
             Expr::Binary(bin) => {
                 Expr::Binary(Box::new(Binary{
