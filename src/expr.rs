@@ -99,6 +99,14 @@ impl Expr {
                     self.clone()
                 }
             }
+            Expr::TypeBinding(binding) => {
+                Expr::TypeBinding(Box::new(TypeBinding{
+                    name: binding.name.clone(),
+                    op: binding.op.clone(),
+                    val: binding.val.clone(),
+                    in_expr: binding.in_expr.clone().map(|v| v.beta_reduction(name, val)),
+                }))
+            }
             Expr::Abstraction(abs) => {
                 if *name != abs.param.lexeme {
                     Expr::Abstraction(Box::new(AbstractionDef {
@@ -118,9 +126,6 @@ impl Expr {
                 }))
             }
             Expr::Beta(_) => {
-                self.clone()
-            }
-            Expr::TypeBinding(_) => {
                 self.clone()
             }
         }

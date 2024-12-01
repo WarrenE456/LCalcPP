@@ -1,16 +1,57 @@
-# BTree
-#   | Node ({ left: Any * Option<BTree>), right: (Any * Option<Btree)})
-#   | Leaf (Float)
+# BTree = { val: Any, left: Option<Btree>, right: Option<Btree> }
 
 # CASEBTREE (BTREE_NODE (...) (...)) fn fc => (BTREE_NODE (...) (...)) fn
 # CASEBTREE (BTREE_LEAF (val)) fn fc => val fc
 
-type Option = (Any -> Any) -> Any -> Any in
+# Define Option
+type OptionChoser = Any -> Any -> Any in
+type Option = OptionChoser -> Any in
 let SOME : Any -> Option = L val. L f. L c. f val in
 let NONE : Option        = L f. L c. c in
-
 let CASEOPTION : Option -> (Any -> Any) -> Any -> Any =
     L option. L f. L c. option f c
 in
 
-PRINT ((SOME 3) 3 5)
+# Define Binary Tree
+type BtreeField = Any -> Any -> Any -> Any in
+type Btree = BtreeField -> Any in
+let BTREE : Any -> Option -> Option -> Btree = L v. L l. L r. L f. f v l r in
+
+# Btree 'fields'
+let BTREE_VAL : BtreeField = L v. L l. L r. v in
+let BTREE_LEFT : BtreeField = L v. L l. L r. l in
+let BTREE_RIGHT : BtreeField = L v. L l. L r. r in
+
+# Btree 'Methods'
+type Bool = Any -> Any -> Any in
+let TRUE : Bool = L a. L b. a in
+let FALSE : Bool = L a. L b. b in
+let F = L f. L btree. L target.
+    let val = btree BTREE_VAL in
+    # if then
+    (EQUAL val target) TRUE
+    # else if
+    ((GREATER target val) (
+        CASEOPTION (btree BTREE_RIGHT)
+            (L right. f right target)
+            FALSE
+    ) # else
+    (
+        CASEOPTION (btree BTREE_LEFT)
+            (L left. f left target)
+            FALSE
+    ))
+in
+let Y = L f. (L g. f (g g))(L g. f (g g)) in
+let BTREE_SEARCH : Btree ->Any -> Bool = Y F in 
+
+let node = BTREE 5
+    (SOME (
+        BTREE 2 NONE NONE
+    ))
+    (SOME (
+        BTREE 6 NONE NONE
+    ))
+in
+
+PRINT ((BTREE_SEARCH node 10) "True" "False")
