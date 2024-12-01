@@ -118,22 +118,6 @@ impl Type {
         }
         Ok(())
     }
-    pub fn new_false() -> Val {
-        let body = Expr::Abstraction(
-            Box::new(
-                AbstractionDef {
-                    param: Token { t: TokenType::Identifer, lexeme: "b".to_string(), line: 0, col: 0 },
-                    paramtype: None,
-                    body: Expr::Primary(Token { t: TokenType::Identifer, lexeme: "b".to_string(), line: 0, col: 0 })
-                }
-            )
-        );
-        Val::Abstraction(Abstraction {
-            param: Token { t: TokenType::Identifer, lexeme: "a".to_string(), line: 0, col: 0 },
-            paramtype: None,
-            body
-        }, None)
-    }
     pub fn from_token(tok: &Token, interpreter: &Interpreter) -> Result<Option<Type>, RuntimeError> {
             Type::from_typename(&tok.lexeme, interpreter).ok_or_else(|| {
                 let msg = format!("Reference to unbound type '{}'.", tok.lexeme);
@@ -232,11 +216,15 @@ impl Val {
                 }
             )
         );
-        Val::Abstraction(Abstraction {
+        let mut _true = Val::Abstraction(Abstraction {
             param: Token { t: TokenType::Identifer, lexeme: "a".to_string(), line: 0, col: 0 },
             paramtype: None,
             body
-        }, None)
+        }, None);
+        Type::enforce_type(
+            &mut _true, &Some(Type::Abstraction(None, Some(Box::new(Type::Abstraction(None, None)))))
+        ).unwrap();
+        _true
     }
     pub fn new_false() -> Val {
         let body = Expr::Abstraction(
@@ -248,11 +236,15 @@ impl Val {
                 }
             )
         );
-        Val::Abstraction(Abstraction {
+        let mut _false = Val::Abstraction(Abstraction {
             param: Token { t: TokenType::Identifer, lexeme: "a".to_string(), line: 0, col: 0 },
             paramtype: None,
             body
-        }, None)
+        }, None);
+        Type::enforce_type(
+            &mut _false, &Some(Type::Abstraction(None, Some(Box::new(Type::Abstraction(None, None)))))
+        ).unwrap();
+        _false
     }
 }
 

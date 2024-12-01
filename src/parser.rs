@@ -212,7 +212,6 @@ impl<'a> Parser<'a> {
         Ok(_type)
     }
 
-    // Fix 'end of file' error message when attemping to use untyped lambda e.g. L x. x
     // lambda -> "L" IDENTIFIER ":" type "." expr | term ";"
     fn lambda(&self) -> Result<Expr, ParserError> {
         if self.is_match(TokenType::Lambda) {

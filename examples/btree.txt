@@ -47,11 +47,19 @@ let BTREE_SEARCH : Btree ->Any -> Bool = Y F in
 
 let node = BTREE 5
     (SOME (
-        BTREE 2 NONE NONE
+        BTREE 2
+            (SOME(
+                BTREE (-1.03) NONE NONE
+            ))
+            NONE
     ))
     (SOME (
         BTREE 6 NONE NONE
     ))
 in
 
-PRINT ((BTREE_SEARCH node 10) "True" "False")
+let _ = PRINT ((BTREE_SEARCH node 10) "True" "False") in
+let _ = PRINT ((BTREE_SEARCH node 5) "True" "False")  in
+let _ = PRINT ((BTREE_SEARCH node 2) "True" "False")  in
+let _ = PRINT ((BTREE_SEARCH node (-1.03)) "True" "False")  in
+PRINT ((BTREE_SEARCH node 6) "True" "False")
