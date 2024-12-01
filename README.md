@@ -1,7 +1,7 @@
 # LCalc++
 LCalc++ is a toy language I implemented after going through the first part of 'Crafting Interpreters' (it's a great book BTW. You should check it out). As you could probably guess by the name, LCalc++ is a typed Lambda Calculus-like language.
 # How to Run
-Git clone the git repo: ```git clone [repo url]``` then, cd into the directory that was created. This is a rust project so run ```cargo run``` to build and run the project (install cargo if it's not already installed).
+Git clone the git repo: ```git clone [repo url]``` then, cd into the directory that was created. This is a Rust project so run ```cargo run``` to build and run the project (install cargo if it's not already installed).
 This should run LCalc++ in prompt-mode, which leads me into the next section.
 # A Short Tutorial
 Creating a variable looks like this: ```let var_name : Number = 3``` Keep in mind the type annotation is optional. To 'concatenate statements' (kinda) you can use 'in' expressions:
